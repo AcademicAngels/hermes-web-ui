@@ -202,12 +202,12 @@ function shouldUseLiteralContentSearch(query: string): boolean {
       const inner = raw.slice(1, -1)
       if (!inner.trim()) return true
       if (!/^[\p{L}\p{N}\s.-]+$/u.test(inner)) return true
-      if ((inner.includes('.') || inner.includes('-')) && !/^[A-Za-z0-9\s.-]+$/.test(inner)) return true
+      if ((inner.includes('.') || inner.includes('-')) && !/^[\p{L}\p{N}]+(?:[.-][\p{L}\p{N}]+)*(?:\s+[\p{L}\p{N}]+(?:[.-][\p{L}\p{N}]+)*)*$/u.test(inner)) return true
       continue
     }
 
     if (raw.includes('.') || raw.includes('-')) {
-      if (!/^[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)*$/.test(raw)) return true
+      if (!/^[\p{L}\p{N}]+(?:[.-][\p{L}\p{N}]+)*$/u.test(raw)) return true
       continue
     }
 
@@ -261,7 +261,7 @@ function sanitizeFtsQuery(query: string): string {
   sanitized = sanitized.replace(/(^|\s)\*/g, '$1')
   sanitized = sanitized.trim().replace(/^(AND|OR|NOT)\b\s*/i, '')
   sanitized = sanitized.trim().replace(/\s+(AND|OR|NOT)\s*$/i, '')
-  sanitized = sanitized.replace(/\b(\w+(?:[.-]\w+)+)\b/g, '"$1"')
+  sanitized = sanitized.replace(/\b([\p{L}\p{N}]+(?:[.-][\p{L}\p{N}]+)+)\b/gu, '"$1"')
 
   for (let i = 0; i < quotedParts.length; i += 1) {
     sanitized = sanitized.replace(`\u0000Q${i}\u0000`, quotedParts[i])

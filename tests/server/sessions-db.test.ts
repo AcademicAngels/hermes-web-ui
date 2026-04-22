@@ -452,12 +452,9 @@ describe('session DB summaries', () => {
     expect(rows[1].id).toBe('node-quoted-wildcard-1')
   })
 
-  it('routes non-ASCII dotted queries to literal search instead of unsafe FTS', async () => {
+  it('keeps non-ASCII dotted queries on the safe quoted FTS path', async () => {
     titleAllMock.mockReturnValue([])
-    contentAllMock.mockImplementation(() => {
-      throw new Error('fts5: syntax error near "."')
-    })
-    likeAllMock.mockReturnValue([
+    contentAllMock.mockReturnValue([
       {
         id: 'unicode-dot-1',
         source: 'cli',
@@ -489,8 +486,8 @@ describe('session DB summaries', () => {
     const mod = await import('../../packages/server/src/db/hermes/sessions-db')
     const rows = await mod.searchSessionSummaries('naïve.js', undefined, 10)
 
-    expect(contentAllMock).not.toHaveBeenCalled()
-    expect(likeAllMock).toHaveBeenCalled()
+    expect(contentAllMock).toHaveBeenCalledWith('"naïve.js"', 40)
+    expect(likeAllMock).not.toHaveBeenCalled()
     expect(rows).toHaveLength(1)
     expect(rows[0].id).toBe('unicode-dot-1')
   })
