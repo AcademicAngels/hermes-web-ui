@@ -46,6 +46,7 @@ export default {
     save: '保存',
     saved: '已保存',
     saveFailed: '保存失败',
+    deleteFailed: '删除失败',
     ok: '确定',
     copied: '已复制',
     copy: '复制',

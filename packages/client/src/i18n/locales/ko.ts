@@ -48,6 +48,7 @@ export default {
     update: '업데이트',
     create: '생성',
     saveFailed: '저장 실패',
+    deleteFailed: '삭제 실패',
     ok: '확인',
     copied: '복사됨',
     copy: '복사',

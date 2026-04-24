@@ -30,6 +30,8 @@ const timeStr = computed(() => {
 const avatarSvg = computed(() => {
     return multiavatar(props.message.senderName || props.message.senderId)
 })
+
+const mentionNames = computed(() => props.agents.map(a => a.name).filter(Boolean))
 </script>
 
 <template>
@@ -46,7 +48,7 @@ const avatarSvg = computed(() => {
                 <span class="msg-time">{{ timeStr }}</span>
             </div>
             <div class="msg-content" :class="{ 'agent-content': isAgent }">
-                <MarkdownRenderer :content="message.content" />
+                <MarkdownRenderer :content="message.content" :mention-names="mentionNames" />
             </div>
         </div>
     </div>
@@ -137,5 +139,11 @@ const avatarSvg = computed(() => {
     background-color: $msg-user-bg;
     word-break: break-word;
     overflow-wrap: break-word;
+
+    :deep(.mention-highlight) {
+        color: #409eff;
+        font-weight: 600;
+        cursor: default;
+    }
 }
 </style>

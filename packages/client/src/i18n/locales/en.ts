@@ -48,6 +48,7 @@ export default {
     update: 'Update',
     create: 'Create',
     saveFailed: 'Save failed',
+    deleteFailed: 'Delete failed',
     ok: 'OK',
     copied: 'Copied',
     copy: 'Copy',

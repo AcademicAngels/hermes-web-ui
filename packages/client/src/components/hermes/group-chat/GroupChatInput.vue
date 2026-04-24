@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NButton, NDropdown } from 'naive-ui'
 import { useGroupChatStore } from '@/stores/hermes/group-chat'
@@ -74,15 +74,14 @@ function updateMentionState() {
     mentionStartIndex.value = atPos
     activeIndex.value = 0
 
-    // Calculate dropdown position
+    // Calculate dropdown position using mirror span
     const mirror = document.createElement('span')
     const style = getComputedStyle(el)
-    const props = ['fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'textTransform', 'wordSpacing', 'textIndent', 'whiteSpace', 'border', 'padding', 'boxSizing', 'lineHeight']
+    const props = ['fontFamily', 'fontSize', 'fontWeight', 'letterSpacing', 'textTransform', 'wordSpacing', 'textIndent', 'border', 'padding', 'boxSizing', 'lineHeight']
     props.forEach(p => { (mirror.style as any)[p] = style[p as any] })
     mirror.style.position = 'absolute'
     mirror.style.visibility = 'hidden'
-    mirror.style.whiteSpace = 'pre-wrap'
-    mirror.style.width = el.offsetWidth + 'px'
+    mirror.style.whiteSpace = 'nowrap'
     mirror.textContent = text.slice(0, atPos + 1)
 
     const rect = el.getBoundingClientRect()
@@ -91,7 +90,10 @@ function updateMentionState() {
     document.body.removeChild(mirror)
 
     dropdownX.value = rect.left + mirrorRect.width - el.scrollLeft
-    dropdownY.value = rect.top + mirrorRect.height - el.scrollTop - 4
+    // Estimate Y based on newlines before @ and line height
+    const linesBeforeAt = text.slice(0, atPos + 1).split('\n').length - 1
+    const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2
+    dropdownY.value = rect.top + linesBeforeAt * lineHeight - el.scrollTop + lineHeight + 4
 
     mentionActive.value = filteredAgents.value.length > 0
 }

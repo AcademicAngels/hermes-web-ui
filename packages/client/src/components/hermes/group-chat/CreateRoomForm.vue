@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { NInput, NButton, NSpace, NInputNumber, NCollapse, NCollapseItem } from 'naive-ui'
+
+type InputLikeInstance = {
+    focus: () => void
+}
 
 const { t } = useI18n()
 const emit = defineEmits<{
@@ -13,6 +17,7 @@ const roomName = ref('')
 const inviteCode = ref('')
 const userName = ref('')
 const description = ref('')
+const roomInput = ref<InputLikeInstance | null>(null)
 
 const compression = ref({
     triggerTokens: 100000,
@@ -36,6 +41,10 @@ function handleCreate() {
     if (!name || !user) return
     emit('submit', name, code, user, description.value.trim(), { ...compression.value })
 }
+
+function focusRoomInput() {
+    nextTick(() => roomInput.value?.focus())
+}
 </script>
 
 <template>
@@ -45,7 +54,7 @@ function handleCreate() {
             <NInput
                 v-model:value="userName"
                 :placeholder="t('groupChat.yourNamePlaceholder')"
-                @keyup.enter="$refs.roomInput?.$el?.querySelector('input')?.focus()"
+                @keyup.enter="focusRoomInput"
             />
         </div>
         <div class="form-group">

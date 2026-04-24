@@ -19,7 +19,7 @@ await esbuild.build({
     __APP_VERSION__: JSON.stringify(version),
   },
   sourcemap: true,
-  minify: false,
-  treeShaking: false,
+  minify: true,
+  treeShaking: true,
   logLevel: 'info',
 })

@@ -10,7 +10,6 @@ import {
     type RoomAgent,
     type ChatMessage,
     type MemberInfo,
-    type JoinResult,
     createRoom,
     listRooms,
     getRoomDetail,
@@ -19,7 +18,6 @@ import {
     listAgents,
     removeAgent,
     deleteRoom as deleteRoomApi,
-    updateRoomConfig,
 } from '@/api/hermes/group-chat'
 
 export const useGroupChatStore = defineStore('groupChat', () => {
@@ -188,6 +186,23 @@ export const useGroupChatStore = defineStore('groupChat', () => {
                     if (!res?.error) {
                         members.value = res.members || []
                         if (res.agents) agents.value = res.agents
+
+                        // Restore typing state from server
+                        if (res.typingUsers) {
+                            for (const u of res.typingUsers) {
+                                if (!typingUsers.value.has(u.userId)) {
+                                    const timer = setTimeout(() => typingUsers.value.delete(u.userId), 5000)
+                                    typingUsers.value.set(u.userId, { name: u.userName, timer })
+                                }
+                            }
+                        }
+
+                        // Restore context statuses from server
+                        if (res.contextStatuses) {
+                            contextStatuses.value = new Map(
+                                res.contextStatuses.map((s: any) => [s.agentName, s])
+                            )
+                        }
                     }
                     resolve()
                 })

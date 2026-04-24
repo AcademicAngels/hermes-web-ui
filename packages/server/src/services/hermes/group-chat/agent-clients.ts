@@ -1,9 +1,10 @@
 import { io, Socket } from 'socket.io-client'
 import { EventSource } from 'eventsource'
-import type { Namespace } from 'socket.io'
 import { getToken } from '../../../services/auth'
 import type { GatewayManager } from '../gateway-manager'
 import { deleteSession as hermesDeleteSession } from '../hermes-cli'
+import { getActiveProfileName } from '../hermes-profile'
+import { logger } from '../../../services/logger'
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -55,7 +56,6 @@ class AgentClient {
     private socket: Socket | null = null
     private joinedRooms = new Set<string>()
     private handlers: AgentEventHandler
-    private port: number = 8648
     private _reconnecting = false
     private gatewayManager: GatewayManager | null = null
     private contextEngine: any = null
@@ -90,7 +90,6 @@ class AgentClient {
     }
 
     async connect(port = 8648): Promise<void> {
-        this.port = port
         const token = await getToken()
 
         this.socket = io(`http://127.0.0.1:${port}/group-chat`, {
@@ -112,13 +111,13 @@ class AgentClient {
 
             this.socket!.on('connect', () => {
                 clearTimeout(timeout)
-                console.log(`[AgentClient] ${this.name} connected, socket id: ${this.socket!.id}`)
+                logger.debug(`[AgentClient] ${this.name} connected, socket id: ${this.socket!.id}`)
                 resolve()
             })
 
             this.socket!.on('connect_error', (err) => {
                 clearTimeout(timeout)
-                console.error(`[AgentClient] ${this.name} connect_error: ${err.message}`, err)
+                logger.error(err, `[AgentClient] ${this.name} connect_error`)
                 reject(err)
             })
         })
@@ -169,6 +168,11 @@ class AgentClient {
         this.socket!.emit('stop_typing', { roomId })
     }
 
+    emitContextStatus(roomId: string, status: 'compressing' | 'replying' | 'ready'): void {
+        this.ensureConnected()
+        this.socket!.emit('context_status', { roomId, agentName: this.name, status })
+    }
+
     getJoinedRooms(): string[] {
         return Array.from(this.joinedRooms)
     }
@@ -181,10 +185,24 @@ class AgentClient {
 
     private async deleteSession(sessionId: string): Promise<void> {
         try {
-            const ok = await hermesDeleteSession(sessionId, this.profile)
-            console.log(`[AgentClients] ${this.name}: delete session ${sessionId} (profile=${this.profile}) → ${ok ? 'ok' : 'failed'}`)
+            const sessionProfile = this.storage?.getSessionProfile?.(sessionId)
+            const currentProfile = getActiveProfileName()
+
+            if (sessionProfile && sessionProfile.profile_name !== currentProfile) {
+                // Cross-profile: enqueue deferred delete, don't switch profile
+                this.storage?.enqueuePendingSessionDelete?.(sessionId, sessionProfile.profile_name)
+                logger.info(`[AgentClients] ${this.name}: cross-profile deferred delete session ${sessionId} (session=${sessionProfile.profile_name}, active=${currentProfile})`)
+                return
+            }
+
+            // Same profile or no mapping: delete directly
+            const ok = await hermesDeleteSession(sessionId)
+            if (ok) {
+                this.storage?.deleteSessionProfile?.(sessionId)
+            }
+            logger.debug(`[AgentClients] ${this.name}: delete session ${sessionId} (profile=${this.profile}) → ${ok ? 'ok' : 'failed'}`)
         } catch (err: any) {
-            console.warn(`[AgentClients] ${this.name}: failed to delete session ${sessionId}: ${err.message}`)
+            logger.warn(`[AgentClients] ${this.name}: failed to delete session ${sessionId}: ${err.message}`)
         }
     }
 
@@ -200,17 +218,17 @@ class AgentClient {
         msg: { content: string; senderName: string; senderId: string; timestamp: number },
         onStatus?: (status: 'compressing' | 'replying' | 'ready') => void,
     ): Promise<void> {
-        console.log(`[AgentClients] ${this.name} mentioned by ${msg.senderName}: "${msg.content.slice(0, 50)}"`)
+        logger.debug(`[AgentClients] ${this.name} mentioned by ${msg.senderName}: "${msg.content.slice(0, 50)}"`)
         if (!this.gatewayManager) {
-            console.log(`[AgentClients] ${this.name}: gatewayManager is null, skipping`)
+            logger.debug(`[AgentClients] ${this.name}: gatewayManager is null, skipping`)
             return
         }
 
         const upstream = this.gatewayManager.getUpstream(this.profile)
         const apiKey = this.gatewayManager.getApiKey(this.profile)
-        console.log(`[AgentClients] ${this.name}: upstream=${upstream}, profile=${this.profile}`)
+        logger.debug(`[AgentClients] ${this.name}: upstream=${upstream}, profile=${this.profile}`)
         if (!upstream) {
-            console.error(`[AgentClients] ${this.name}: no gateway upstream for profile "${this.profile}"`)
+            logger.error(`[AgentClients] ${this.name}: no gateway upstream for profile "${this.profile}"`)
             return
         }
 
@@ -226,7 +244,7 @@ class AgentClient {
 
             if (this.contextEngine && this.storage) {
                 try {
-                    console.log(`[AgentClients] ${this.name}: building context...`)
+                    logger.debug(`[AgentClients] ${this.name}: building context...`)
                     onStatus?.('compressing')
                     // Get room members with descriptions for context
                     const roomMembers: Array<{ userId: string; name: string; description: string }> = this.storage.getRoomMembers(roomId) || []
@@ -257,10 +275,10 @@ class AgentClient {
                     })
                     conversationHistory = ctx.conversationHistory
                     instructions = ctx.instructions
-                    console.log(`[AgentClients] ${this.name}: context built — historyLen=${conversationHistory.length}, meta=`, JSON.stringify(ctx.meta))
+                    logger.debug(`[AgentClients] ${this.name}: context built — historyLen=${conversationHistory.length}, meta=%j`, ctx.meta)
                     onStatus?.('replying')
                 } catch (err: any) {
-                    console.warn(`[AgentClients] ${this.name}: context engine failed: ${err.message}`)
+                    logger.warn(`[AgentClients] ${this.name}: context engine failed: ${err.message}`)
                     onStatus?.('replying')
                     // Degrade: continue without context
                 }
@@ -287,24 +305,33 @@ class AgentClient {
 
             if (!runRes.ok) {
                 const text = await runRes.text().catch(() => '')
-                console.error(`[AgentClients] ${this.name}: gateway run failed (${runRes.status}): ${text}`)
+                logger.error(`[AgentClients] ${this.name}: gateway run failed (${runRes.status}): ${text}`)
                 this.stopTyping(roomId)
                 return
             }
 
             const runData = await runRes.json() as any
             const run_id = runData.run_id
-            console.log(`[AgentClients] ${this.name}: run started, response=`, JSON.stringify(runData))
+            logger.debug(`[AgentClients] ${this.name}: run started, response=%j`, runData)
             if (!run_id) {
-                console.error(`[AgentClients] ${this.name}: no run_id in response`)
+                logger.error(`[AgentClients] ${this.name}: no run_id in response`)
                 this.stopTyping(roomId)
                 return
+            }
+
+            // Save session-to-profile mapping after gateway confirms the run
+            const actualSessionId = runData.session_id || sessionId
+            if (!this.storage) {
+                logger.warn(`[AgentClients] ${this.name}: storage is null, cannot save session profile for ${actualSessionId}`)
+            } else {
+                this.storage.saveSessionProfile(actualSessionId, roomId, this.agentId, this.profile)
+                logger.debug(`[AgentClients] ${this.name}: saved session profile ${actualSessionId} → profile=${this.profile}`)
             }
 
             // Stream events from Hermes
             const eventsUrl = new URL(`${upstream}/v1/runs/${run_id}/events`)
             if (apiKey) eventsUrl.searchParams.set('token', apiKey)
-            console.log(`[AgentClients] ${this.name}: streaming events from ${eventsUrl}`)
+            logger.debug(`[AgentClients] ${this.name}: streaming events from ${eventsUrl}`)
             const source = new EventSource(eventsUrl.toString())
 
             let fullContent = ''
@@ -312,25 +339,25 @@ class AgentClient {
             source.onmessage = (e: any) => {
                 try {
                     const parsed = JSON.parse(e.data)
-                    console.log(`[AgentClients] ${this.name}: event=${parsed.event}`)
+                    logger.debug(`[AgentClients] ${this.name}: event=${parsed.event}`)
 
                     if (parsed.event === 'run.completed') {
                         source.close()
-                        console.log(`[AgentClients] ${this.name}: run completed, content length=${fullContent.length}`)
+                        logger.debug(`[AgentClients] ${this.name}: run completed, content length=${fullContent.length}`)
                         if (fullContent) {
                             this.stopTyping(roomId)
                             this.sendMessage(roomId, fullContent)
                         }
-                        this.deleteSession(sessionId).catch(() => { })
+                        this.deleteSession(actualSessionId).catch(() => { })
                         onStatus?.('ready')
                         return
                     }
 
                     if (parsed.event === 'run.failed') {
                         source.close()
-                        console.error(`[AgentClients] ${this.name}: run failed`)
+                        logger.error(`[AgentClients] ${this.name}: run failed`)
                         this.stopTyping(roomId)
-                        this.deleteSession(sessionId).catch(() => { })
+                        this.deleteSession(actualSessionId).catch(() => { })
                         onStatus?.('ready')
                         return
                     }
@@ -345,14 +372,14 @@ class AgentClient {
             }
 
             source.onerror = (err: any) => {
-                console.error(`[AgentClients] ${this.name}: EventSource error`, err)
+                logger.error(err, `[AgentClients] ${this.name}: EventSource error`)
                 source.close()
                 this.stopTyping(roomId)
-                this.deleteSession(sessionId).catch(() => { })
+                this.deleteSession(actualSessionId).catch(() => { })
                 onStatus?.('ready')
             }
         } catch (err: any) {
-            console.error(`[AgentClients] ${this.name}: error handling message: ${err.message}`)
+            logger.error(`[AgentClients] ${this.name}: error handling message: ${err.message}`)
             this.stopTyping(roomId)
             this.deleteSession(sessionId).catch(() => { })
             onStatus?.('ready')
@@ -382,13 +409,13 @@ class AgentClient {
         s.io.on('reconnect', async () => {
             if (this._reconnecting) return
             this._reconnecting = true
-            console.log(`[AgentClients] ${this.name} reconnecting, rejoining ${this.joinedRooms.size} rooms...`)
+            logger.info(`[AgentClients] ${this.name} reconnecting, rejoining ${this.joinedRooms.size} rooms...`)
             const rooms = Array.from(this.joinedRooms)
             for (const roomId of rooms) {
                 try {
                     await this.joinRoom(roomId)
                 } catch (err: any) {
-                    console.error(`[AgentClients] ${this.name} failed to rejoin room ${roomId}: ${err.message}`)
+                    logger.error(`[AgentClients] ${this.name} failed to rejoin room ${roomId}: ${err.message}`)
                 }
             }
             this._reconnecting = false
@@ -403,7 +430,6 @@ export class AgentClients {
     private _gatewayManager: GatewayManager | null = null
     private _contextEngine: any = null
     private _storage: any = null
-    private _nsp: Namespace | null = null
 
     // Per-room processing lock + mention queue
     private _processingRooms = new Set<string>()
@@ -422,7 +448,7 @@ export class AgentClients {
         if (this._contextEngine) client.setContextEngine(this._contextEngine)
         if (this._storage) client.setStorage(this._storage)
 
-        console.log(`[AgentClients] Connected: ${client.name} (${client.agentId})`)
+        logger.info(`[AgentClients] Connected: ${client.name} (${client.agentId})`)
         return client
     }
 
@@ -438,7 +464,7 @@ export class AgentClients {
 
         room.set(client.agentId, client)
         const result = await client.joinRoom(roomId)
-        console.log(`[AgentClients] ${client.name} joined room: ${roomId}`)
+        logger.info(`[AgentClients] ${client.name} joined room: ${roomId}`)
         return result
     }
 
@@ -453,7 +479,7 @@ export class AgentClients {
         if (client) {
             client.disconnect()
             room.delete(agentId)
-            console.log(`[AgentClients] ${client.name} left room: ${roomId}`)
+            logger.info(`[AgentClients] ${client.name} left room: ${roomId}`)
 
             // Invalidate context engine cache for this agent
             if (this._contextEngine) {
@@ -516,7 +542,7 @@ export class AgentClients {
 
         room.forEach((client) => client.disconnect())
         this.rooms.delete(roomId)
-        console.log(`[AgentClients] All agents disconnected from room: ${roomId}`)
+        logger.info(`[AgentClients] All agents disconnected from room: ${roomId}`)
 
         // Invalidate context engine cache for this room
         if (this._contextEngine) {
@@ -532,7 +558,7 @@ export class AgentClients {
             room.forEach((client) => client.disconnect())
         })
         this.rooms.clear()
-        console.log('[AgentClients] All agents disconnected')
+        logger.info('[AgentClients] All agents disconnected')
     }
 
     /**
@@ -565,12 +591,6 @@ export class AgentClients {
         })
     }
 
-    /**
-     * Set Socket.IO namespace for emitting status events to rooms.
-     */
-    setNamespace(nsp: Namespace): void {
-        this._nsp = nsp
-    }
 
     /**
      * Server-side: parse @mentions and forward to matching agents directly.
@@ -585,11 +605,11 @@ export class AgentClients {
         const mentioned = agents.filter(a => content.includes(`@${a.name.toLowerCase()}`))
         if (mentioned.length === 0) return
 
-        console.log(`[AgentClients] ${mentioned.map(a => a.name).join(', ')} mentioned by ${msg.senderName}`)
+        logger.debug(`[AgentClients] ${mentioned.map(a => a.name).join(', ')} mentioned by ${msg.senderName}`)
 
         for (const agent of mentioned) {
             this._processAgentMention(roomId, agent, msg).catch((err) => {
-                console.error(`[AgentClients] error processing mention for ${agent.name}: ${err.message}`)
+                logger.error(`[AgentClients] error processing mention for ${agent.name}: ${err.message}`)
             })
         }
     }
@@ -611,18 +631,14 @@ export class AgentClients {
                 this._mentionQueue.set(agentKey, queue)
             }
             queue.push({ agent, msg })
-            console.log(`[AgentClients] agent ${agent.name} is processing, queued mention in room ${roomId}`)
+            logger.debug(`[AgentClients] agent ${agent.name} is processing, queued mention in room ${roomId}`)
             return
         }
 
         this._processingRooms.add(agentKey)
         const onStatus = (status: 'compressing' | 'replying' | 'ready') => {
-            this._nsp?.to(roomId).emit('context_status', {
-                roomId,
-                agentName: agent.name,
-                status,
-            })
-            console.log(`[AgentClients] room ${roomId} agent ${agent.name} status: ${status}`)
+            agent.emitContextStatus(roomId, status)
+            logger.debug(`[AgentClients] room ${roomId} agent ${agent.name} status: ${status}`)
         }
 
         try {
@@ -641,13 +657,13 @@ export class AgentClients {
         if (!queue || queue.length === 0) return
 
         this._mentionQueue.delete(agentKey)
-        console.log(`[AgentClients] draining ${queue.length} queued mention(s) for ${agentKey}`)
+        logger.debug(`[AgentClients] draining ${queue.length} queued mention(s) for ${agentKey}`)
 
         // Process the last queued mention only (most recent, discards stale intermediate ones)
         const last = queue[queue.length - 1]
         this._processingRooms.add(agentKey)
         this._processAgentMention(roomId, last.agent, last.msg).catch((err) => {
-            console.error(`[AgentClients] error processing queued mention: ${err.message}`)
+            logger.error(`[AgentClients] error processing queued mention: ${err.message}`)
         })
     }
 }

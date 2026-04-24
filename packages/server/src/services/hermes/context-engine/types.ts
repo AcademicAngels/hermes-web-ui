@@ -57,6 +57,15 @@ export interface ContextSnapshot {
     updatedAt: number
 }
 
+// ─── Summary Cache ──────────────────────────────────────────
+
+export interface SummaryCacheEntry {
+    summary: string
+    lastMessageId: string
+    lastMessageTimestamp: number
+    createdAt: number
+}
+
 // ─── Dependency Injection ──────────────────────────────────
 
 export interface MessageFetcher {

@@ -39,59 +39,47 @@ function makeMessages(count: number, roomId = 'room-1', startTimestamp = 1000): 
 describe('SummaryCache', () => {
     it('stores and retrieves entries', () => {
         const cache = new SummaryCache(60_000)
-        cache.set('room-1', 'agent-1', {
-            summaryContent: 'Summary text',
-            lastSummarizedTimestamp: 5000,
+        cache.set('room-1', {
+            summary: 'Summary text',
+            lastMessageId: 'msg-10',
+            lastMessageTimestamp: 5000,
             createdAt: Date.now(),
-            messageCountAtCreation: 20,
         })
-        const entry = cache.get('room-1', 'agent-1')
+        const entry = cache.get('room-1')
         expect(entry).toBeDefined()
-        expect(entry!.summaryContent).toBe('Summary text')
+        expect(entry!.summary).toBe('Summary text')
     })
 
     it('returns undefined for expired entries', () => {
         const cache = new SummaryCache(100) // 100ms TTL
-        cache.set('room-1', 'agent-1', {
-            summaryContent: 'Old summary',
-            lastSummarizedTimestamp: 5000,
+        cache.set('room-1', {
+            summary: 'Old summary',
+            lastMessageId: 'msg-5',
+            lastMessageTimestamp: 5000,
             createdAt: Date.now() - 200, // created 200ms ago
-            messageCountAtCreation: 10,
         })
-        expect(cache.get('room-1', 'agent-1')).toBeUndefined()
+        expect(cache.get('room-1')).toBeUndefined()
     })
 
-    it('invalidates all entries for a room', () => {
+    it('invalidates entries for a room', () => {
         const cache = new SummaryCache(60_000)
-        cache.set('room-1', 'agent-1', { summaryContent: 'A', lastSummarizedTimestamp: 1000, createdAt: Date.now(), messageCountAtCreation: 5 })
-        cache.set('room-1', 'agent-2', { summaryContent: 'B', lastSummarizedTimestamp: 2000, createdAt: Date.now(), messageCountAtCreation: 5 })
-        cache.set('room-2', 'agent-1', { summaryContent: 'C', lastSummarizedTimestamp: 3000, createdAt: Date.now(), messageCountAtCreation: 5 })
+        cache.set('room-1', { summary: 'A', lastMessageId: 'msg-1', lastMessageTimestamp: 1000, createdAt: Date.now() })
+        cache.set('room-2', { summary: 'C', lastMessageId: 'msg-3', lastMessageTimestamp: 3000, createdAt: Date.now() })
 
-        cache.invalidateRoom('room-1')
-        expect(cache.get('room-1', 'agent-1')).toBeUndefined()
-        expect(cache.get('room-1', 'agent-2')).toBeUndefined()
-        expect(cache.get('room-2', 'agent-1')).toBeDefined()
-    })
-
-    it('deletes specific entry', () => {
-        const cache = new SummaryCache(60_000)
-        cache.set('room-1', 'agent-1', { summaryContent: 'A', lastSummarizedTimestamp: 1000, createdAt: Date.now(), messageCountAtCreation: 5 })
-        cache.set('room-1', 'agent-2', { summaryContent: 'B', lastSummarizedTimestamp: 2000, createdAt: Date.now(), messageCountAtCreation: 5 })
-
-        cache.delete('room-1', 'agent-1')
-        expect(cache.get('room-1', 'agent-1')).toBeUndefined()
-        expect(cache.get('room-1', 'agent-2')).toBeDefined()
+        cache.invalidate('room-1')
+        expect(cache.get('room-1')).toBeUndefined()
+        expect(cache.get('room-2')).toBeDefined()
     })
 
     it('enforces max entry limit', () => {
         const cache = new SummaryCache(60_000)
-        // Fill cache beyond limit (internal MAX_ENTRIES = 200, but we test the logic)
+        // Fill cache beyond limit (internal MAX_ENTRIES = 200)
         for (let i = 0; i < 210; i++) {
-            cache.set('room-1', `agent-${i}`, {
-                summaryContent: `Summary ${i}`,
-                lastSummarizedTimestamp: i * 1000,
+            cache.set(`room-${i}`, {
+                summary: `Summary ${i}`,
+                lastMessageId: `msg-${i}`,
+                lastMessageTimestamp: i * 1000,
                 createdAt: Date.now() - (210 - i), // earlier entries have older createdAt
-                messageCountAtCreation: 5,
             })
         }
         // Cache should not exceed 200 entries
@@ -108,11 +96,17 @@ describe('prompts', () => {
             roomName: 'general',
             agentDescription: 'AI coding assistant',
             memberNames: ['Alice', 'Bob', 'Claude'],
+            members: [
+                { userId: 'u1', name: 'Alice', description: 'dev' },
+                { userId: 'u2', name: 'Bob', description: 'designer' },
+                { userId: 'u3', name: 'Claude', description: '' },
+            ],
         })
         expect(result).toContain('"Claude"')
         expect(result).toContain('general')
         expect(result).toContain('AI coding assistant')
-        expect(result).toContain('Alice, Bob, Claude')
+        expect(result).toContain('Alice')
+        expect(result).toContain('Bob')
         expect(result).toContain('@Claude')
     })
 
@@ -122,36 +116,46 @@ describe('prompts', () => {
             roomName: 'dev',
             agentDescription: 'Helper',
             memberNames: [],
+            members: [],
         })
         expect(result).toContain('"GPT"')
-        expect(result).toContain('Unknown')
+        expect(result).toContain('未知')
+    })
+
+    it('builds agent instructions using memberNames when members is empty', () => {
+        const result = buildAgentInstructions({
+            agentName: 'GPT',
+            roomName: 'dev',
+            agentDescription: 'Helper',
+            memberNames: ['Alice', 'Bob'],
+            members: [],
+        })
+        expect(result).toContain('Alice')
+        expect(result).toContain('Bob')
     })
 
     it('builds summarization system prompt', () => {
         const result = buildSummarizationSystemPrompt()
-        expect(result).toContain('summarizer')
-        expect(result).toContain('Current topic')
-        expect(result).toContain('Decisions made')
+        expect(result).toContain('摘要')
     })
 
     it('builds full summary prompt', () => {
         const result = buildFullSummaryPrompt()
-        expect(result).toContain('concise summary')
-        expect(result).toContain('ONLY the summary')
+        expect(result).toContain('摘要')
     })
 
     it('builds incremental update prompt', () => {
         const result = buildIncrementalUpdatePrompt()
-        expect(result).toContain('continued since the last summary')
-        expect(result).toContain('update')
+        expect(result).toContain('更新')
     })
 })
 
 // ─── ContextEngine.buildContext ────────────────────────────────
 
 describe('ContextEngine.buildContext', () => {
+    let mockSummarize = vi.fn().mockResolvedValue({ summary: 'Summary of conversation.', sessionId: 'comp-1' })
     const mockGatewayCaller: GatewayCaller = {
-        summarize: vi.fn().mockResolvedValue('Summary of conversation.'),
+        summarize: mockSummarize,
     }
 
     let mockFetcher: MessageFetcher
@@ -159,16 +163,21 @@ describe('ContextEngine.buildContext', () => {
 
     beforeEach(() => {
         vi.clearAllMocks()
-        mockFetcher = { getMessages: vi.fn().mockReturnValue([]) }
+        mockFetcher = {
+            getMessages: vi.fn().mockReturnValue([]),
+            getContextSnapshot: vi.fn().mockReturnValue(null),
+            saveContextSnapshot: vi.fn(),
+            deleteContextSnapshot: vi.fn(),
+        }
         engine = new ContextEngine({
-            config: { maxHistoryTokens: 4000, tailMessageCount: 10, headMessageCount: 4, charsPerToken: 4, summaryTtlMs: 120_000, summarizationTimeoutMs: 30_000 },
+            config: { maxHistoryTokens: 4000, tailMessageCount: 10, triggerTokens: 100_000, charsPerToken: 4, summarizationTimeoutMs: 30_000 },
             messageFetcher: mockFetcher,
-            gatewayCaller: mockGatewayCaller,
+            gatewayCaller: { summarize: mockSummarize },
         })
     })
 
-    it('returns all messages as history when count <= threshold', async () => {
-        const messages = makeMessages(10) // 10 < 4 + 10 = 14
+    it('returns all messages as history when under threshold', async () => {
+        const messages = makeMessages(10) // 10 messages, under trigger threshold
         mockFetcher.getMessages = vi.fn().mockReturnValue(messages)
 
         const result = await engine.buildContext({
@@ -179,21 +188,22 @@ describe('ContextEngine.buildContext', () => {
             agentSocketId: 'agent-socket',
             roomName: 'general',
             memberNames: ['Alice'],
+            members: [{ userId: 'u1', name: 'Alice', description: '' }],
             upstream: 'http://localhost:8642',
             apiKey: null,
             currentMessage: messages[messages.length - 1],
         })
 
         expect(result.meta.totalMessages).toBe(10)
-        expect(result.meta.summarizedCount).toBe(0)
+        expect(result.meta.compressed).toBe(false)
         expect(result.conversationHistory).toHaveLength(10)
         expect(result.instructions).toContain('Claude')
         // No LLM call for short conversations
-        expect(mockGatewayCaller.summarize).not.toHaveBeenCalled()
+        expect(mockSummarize).not.toHaveBeenCalled()
     })
 
-    it('splits into head/middle/tail when over threshold', async () => {
-        const messages = makeMessages(20) // 20 > 14
+    it('splits into head/tail and compresses middle when over threshold', async () => {
+        const messages = makeMessages(20)
         mockFetcher.getMessages = vi.fn().mockReturnValue(messages)
 
         const result = await engine.buildContext({
@@ -204,61 +214,86 @@ describe('ContextEngine.buildContext', () => {
             agentSocketId: 'agent-socket',
             roomName: 'general',
             memberNames: [],
+            members: [],
             upstream: 'http://localhost:8642',
             apiKey: null,
             currentMessage: messages[messages.length - 1],
+            compression: { triggerTokens: 10 }, // Force compression with tiny threshold
         })
 
         expect(result.meta.totalMessages).toBe(20)
-        expect(result.meta.verbatimHeadCount).toBe(4)
-        expect(result.meta.verbatimTailCount).toBe(10)
-        expect(result.meta.summarizedCount).toBe(6) // 20 - 4 - 10
-        expect(mockGatewayCaller.summarize).toHaveBeenCalledTimes(1)
+        expect(result.meta.compressed).toBe(true)
+        expect(mockSummarize).toHaveBeenCalledTimes(1)
     })
 
     it('uses cache hit when available and no new messages', async () => {
         const messages = makeMessages(20)
         mockFetcher.getMessages = vi.fn().mockReturnValue(messages)
 
-        // First call — creates cache
+        // First call — creates snapshot (with forced compression)
         await engine.buildContext({
             roomId: 'room-1', agentId: 'agent-1', agentName: 'Claude',
             agentDescription: '', agentSocketId: 'agent-socket', roomName: 'general',
-            memberNames: [], upstream: 'http://localhost:8642', apiKey: null,
+            memberNames: [], members: [], upstream: 'http://localhost:8642', apiKey: null,
             currentMessage: messages[messages.length - 1],
+            compression: { triggerTokens: 10 },
         })
 
-        // Second call — cache hit, no new messages
+        // Verify snapshot was saved
+        expect(mockFetcher.saveContextSnapshot).toHaveBeenCalledTimes(1)
+
+        // Simulate that the snapshot now exists in storage
+        const savedSnapshot = mockFetcher.saveContextSnapshot.mock.calls[0]
+        mockFetcher.getContextSnapshot = vi.fn().mockReturnValue({
+            roomId: 'room-1',
+            summary: savedSnapshot[1],
+            lastMessageId: savedSnapshot[2],
+            lastMessageTimestamp: savedSnapshot[3],
+            updatedAt: Date.now(),
+        })
+
+        // Second call — cache hit (snapshot exists, same messages)
         const result2 = await engine.buildContext({
             roomId: 'room-1', agentId: 'agent-1', agentName: 'Claude',
             agentDescription: '', agentSocketId: 'agent-socket', roomName: 'general',
-            memberNames: [], upstream: 'http://localhost:8642', apiKey: null,
+            memberNames: [], members: [], upstream: 'http://localhost:8642', apiKey: null,
             currentMessage: messages[messages.length - 1],
         })
 
+        expect(result2.meta.hadSnapshot).toBe(true)
         // Only one LLM call (from the first buildContext)
-        expect(mockGatewayCaller.summarize).toHaveBeenCalledTimes(1)
+        expect(mockSummarize).toHaveBeenCalledTimes(1)
     })
 
     it('does incremental update when cache hit with new messages', async () => {
         const messages = makeMessages(20)
         mockFetcher.getMessages = vi.fn().mockReturnValue(messages)
 
-        // First call — full summarization of middle
+        // First call — full compression (with forced compression)
         await engine.buildContext({
             roomId: 'room-1', agentId: 'agent-1', agentName: 'Claude',
             agentDescription: '', agentSocketId: 'agent-socket', roomName: 'general',
-            memberNames: [], upstream: 'http://localhost:8642', apiKey: null,
+            memberNames: [], members: [], upstream: 'http://localhost:8642', apiKey: null,
             currentMessage: messages[messages.length - 1],
+            compression: { triggerTokens: 10 },
         })
 
-        expect(mockGatewayCaller.summarize).toHaveBeenCalledTimes(1)
+        // Simulate that the snapshot now exists in storage
+        const savedSnapshot = mockFetcher.saveContextSnapshot.mock.calls[0]
+        mockFetcher.getContextSnapshot = vi.fn().mockReturnValue({
+            roomId: 'room-1',
+            summary: savedSnapshot[1],
+            lastMessageId: savedSnapshot[2],
+            lastMessageTimestamp: savedSnapshot[3],
+            updatedAt: Date.now(),
+        })
+
+        expect(mockSummarize).toHaveBeenCalledTimes(1)
         // First call: no previousSummary (4 args, index 4 is undefined)
-        const firstCallArgs = mockGatewayCaller.summarize.mock.calls[0]
-        expect(firstCallArgs.length).toBe(4)
+        const firstCallArgs = mockSummarize.mock.calls[0]
         expect(firstCallArgs[4]).toBeUndefined() // previousSummary not passed
 
-        // Insert a new message into the middle zone (timestamp 12000)
+        // Insert a new message
         const middleInsert = makeMessage({
             id: 'msg-new', roomId: 'room-1', senderId: 'user-99',
             senderName: 'NewUser', content: 'New middle message', timestamp: 12000,
@@ -270,19 +305,19 @@ describe('ContextEngine.buildContext', () => {
         await engine.buildContext({
             roomId: 'room-1', agentId: 'agent-1', agentName: 'Claude',
             agentDescription: '', agentSocketId: 'agent-socket', roomName: 'general',
-            memberNames: [], upstream: 'http://localhost:8642', apiKey: null,
+            memberNames: [], members: [], upstream: 'http://localhost:8642', apiKey: null,
             currentMessage: updatedMessages[updatedMessages.length - 1],
+            compression: { triggerTokens: 10 },
         })
 
-        expect(mockGatewayCaller.summarize).toHaveBeenCalledTimes(2)
-        // Second call: has previousSummary (5 args)
-        const secondCallArgs = mockGatewayCaller.summarize.mock.calls[1]
-        expect(secondCallArgs.length).toBe(5)
+        expect(mockSummarize).toHaveBeenCalledTimes(2)
+        // Second call: has previousSummary
+        const secondCallArgs = mockSummarize.mock.calls[1]
         expect(secondCallArgs[4]).toBe('Summary of conversation.')
     })
 
     it('falls back to no-summary on LLM failure', async () => {
-        mockGatewayCaller.summarize = vi.fn().mockRejectedValue(new Error('LLM timeout'))
+        mockSummarize.mockRejectedValue(new Error('LLM timeout'))
 
         const messages = makeMessages(20)
         mockFetcher.getMessages = vi.fn().mockReturnValue(messages)
@@ -290,11 +325,12 @@ describe('ContextEngine.buildContext', () => {
         const result = await engine.buildContext({
             roomId: 'room-1', agentId: 'agent-1', agentName: 'Claude',
             agentDescription: '', agentSocketId: 'agent-socket', roomName: 'general',
-            memberNames: [], upstream: 'http://localhost:8642', apiKey: null,
+            memberNames: [], members: [], upstream: 'http://localhost:8642', apiKey: null,
             currentMessage: messages[messages.length - 1],
+            compression: { triggerTokens: 10 },
         })
 
-        // Should not throw, and should still return history (head + tail only, no summary)
+        // Should not throw, and should still return history
         expect(result.conversationHistory.length).toBeGreaterThan(0)
         // No summary pair in the output
         expect(result.conversationHistory[0]?.content).not.toContain('Previous conversation summary')
@@ -305,13 +341,12 @@ describe('ContextEngine.buildContext', () => {
             config: {
                 maxHistoryTokens: 50, // very small budget
                 tailMessageCount: 10,
-                headMessageCount: 4,
+                triggerTokens: 10, // force compression
                 charsPerToken: 4,
-                summaryTtlMs: 120_000,
                 summarizationTimeoutMs: 30_000,
             },
             messageFetcher: mockFetcher,
-            gatewayCaller: mockGatewayCaller,
+            gatewayCaller: { summarize: mockSummarize },
         })
 
         const messages = makeMessages(20)
@@ -320,7 +355,7 @@ describe('ContextEngine.buildContext', () => {
         const result = await engine.buildContext({
             roomId: 'room-1', agentId: 'agent-1', agentName: 'Claude',
             agentDescription: '', agentSocketId: 'agent-socket', roomName: 'general',
-            memberNames: [], upstream: 'http://localhost:8642', apiKey: null,
+            memberNames: [], members: [], upstream: 'http://localhost:8642', apiKey: null,
             currentMessage: messages[messages.length - 1],
         })
 
@@ -340,7 +375,7 @@ describe('ContextEngine.buildContext', () => {
         const result = await engine.buildContext({
             roomId: 'room-1', agentId: 'agent-1', agentName: 'Claude',
             agentDescription: '', agentSocketId: 'agent-socket', roomName: 'general',
-            memberNames: [], upstream: 'http://localhost:8642', apiKey: null,
+            memberNames: [], members: [], upstream: 'http://localhost:8642', apiKey: null,
             currentMessage: messages[messages.length - 1],
         })
 
@@ -362,7 +397,7 @@ describe('ContextEngine.buildContext', () => {
         const result = await engine.buildContext({
             roomId: 'room-1', agentId: 'agent-1', agentName: 'Claude',
             agentDescription: '', agentSocketId: 'agent-socket', roomName: 'general',
-            memberNames: [], upstream: 'http://localhost:8642', apiKey: null,
+            memberNames: [], members: [], upstream: 'http://localhost:8642', apiKey: null,
             currentMessage: messages[messages.length - 1],
         })
 
@@ -377,41 +412,44 @@ describe('ContextEngine.buildContext', () => {
         const result = await engine.buildContext({
             roomId: 'room-1', agentId: 'agent-1', agentName: 'Claude',
             agentDescription: 'Code helper', agentSocketId: 'agent-socket', roomName: 'dev',
-            memberNames: ['Alice', 'Bob'], upstream: 'http://localhost:8642', apiKey: null,
+            memberNames: ['Alice', 'Bob'],
+            members: [
+                { userId: 'u1', name: 'Alice', description: 'dev' },
+                { userId: 'u2', name: 'Bob', description: 'designer' },
+            ],
+            upstream: 'http://localhost:8642', apiKey: null,
             currentMessage: messages[0],
         })
 
         expect(result.instructions).toContain('"Claude"')
         expect(result.instructions).toContain('Code helper')
         expect(result.instructions).toContain('dev')
-        expect(result.instructions).toContain('Alice, Bob')
+        expect(result.instructions).toContain('Alice')
     })
 
     it('invalidates room cache', async () => {
-        const cache = engine as any
-        // Access internal cache via the compressor's cache
-        const summaryCache = (engine as any).cache
-        summaryCache.set('room-1', 'agent-1', {
-            summaryContent: 'Test',
-            lastSummarizedTimestamp: 1000,
-            createdAt: Date.now(),
-            messageCountAtCreation: 10,
+        // Create a snapshot via the fetcher mock
+        mockFetcher.getContextSnapshot = vi.fn().mockReturnValue({
+            roomId: 'room-1',
+            summary: 'Test',
+            lastMessageId: 'msg-10',
+            lastMessageTimestamp: 1000,
+            updatedAt: Date.now(),
         })
 
+        const messages = makeMessages(5)
+        mockFetcher.getMessages = vi.fn().mockReturnValue(messages)
+
+        // Build context to create snapshot
+        await engine.buildContext({
+            roomId: 'room-1', agentId: 'agent-1', agentName: 'Claude',
+            agentDescription: '', agentSocketId: 'agent-socket', roomName: 'general',
+            memberNames: [], members: [], upstream: 'http://localhost:8642', apiKey: null,
+            currentMessage: messages[messages.length - 1],
+        })
+
+        // Invalidate
         engine.invalidateRoom('room-1')
-        expect(summaryCache.get('room-1', 'agent-1')).toBeUndefined()
-    })
-
-    it('invalidates agent cache', async () => {
-        const summaryCache = (engine as any).cache
-        summaryCache.set('room-1', 'agent-1', {
-            summaryContent: 'Test',
-            lastSummarizedTimestamp: 1000,
-            createdAt: Date.now(),
-            messageCountAtCreation: 10,
-        })
-
-        engine.invalidateAgent('room-1', 'agent-1')
-        expect(summaryCache.get('room-1', 'agent-1')).toBeUndefined()
+        expect(mockFetcher.deleteContextSnapshot).toHaveBeenCalledWith('room-1')
     })
 })
