@@ -72,6 +72,7 @@ async function handleDeleteRoom(roomId: string) {
 async function handleSelectRoom(roomId: string) {
     try {
         await store.joinRoom(roomId)
+        if (window.innerWidth <= 768) showSidebar.value = false
     } catch {
         message.error(t('groupChat.joinFailed'))
     }
@@ -173,6 +174,8 @@ watch(() => store.sortedMessages.length, async () => {
 
 <template>
     <div class="group-chat-panel">
+        <!-- Mobile backdrop -->
+        <div class="sidebar-backdrop" :class="{ active: showSidebar }" @click="showSidebar = false" />
         <!-- Room sidebar -->
         <div v-if="showSidebar" class="room-sidebar">
             <div class="sidebar-header">
@@ -421,6 +424,29 @@ export default defineComponent({ components: { CreateRoomForm } })
     display: flex;
     height: 100%;
     overflow: hidden;
+    position: relative;
+}
+
+.sidebar-backdrop {
+    display: none;
+}
+
+@media (max-width: $breakpoint-mobile) {
+    .sidebar-backdrop {
+        display: block;
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 99;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity $transition-fast;
+
+        &.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+    }
 }
 
 // ─── Status Bar ──────────────────────────────────────────
@@ -891,6 +917,10 @@ export default defineComponent({ components: { CreateRoomForm } })
         bottom: 0;
         z-index: 100;
         box-shadow: 4px 0 16px rgba(0, 0, 0, 0.1);
+    }
+
+    .chat-header {
+        padding-left: 56px;
     }
 }
 </style>
