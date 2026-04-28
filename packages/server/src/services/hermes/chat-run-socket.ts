@@ -10,7 +10,7 @@
  */
 import type { Server, Socket } from 'socket.io'
 import { EventSource } from 'eventsource'
-import { setRunSession, getSessionForRun } from '../../routes/hermes/proxy-handler'
+import { setRunSession } from '../../routes/hermes/proxy-handler'
 import { updateUsage } from '../../db/hermes/usage-store'
 import { getSessionDetailFromDb } from '../../db/hermes/sessions-db'
 import { getModelContextLength } from './model-context'
@@ -20,11 +20,28 @@ import { logger } from '../logger'
 
 const compressor = new ChatContextCompressor()
 
-// --- In-flight run tracking ---
+// --- Session state tracking ---
 
-interface InFlightRun {
-  runId: string
-  abortController: AbortController
+interface SessionMessage {
+  id: number | string
+  session_id: string
+  role: string
+  content: string
+  tool_call_id?: string | null
+  tool_calls?: any[] | null
+  tool_name?: string | null
+  timestamp: number
+  reasoning?: string | null
+}
+
+interface SessionState {
+  messages: SessionMessage[]
+  isWorking: boolean
+  events: Array<{ event: string; data: any }>
+  abortController?: AbortController
+  runId?: string
+  inputTokens?: number
+  outputTokens?: number
 }
 
 // --- ChatRunSocket ---
@@ -32,10 +49,8 @@ interface InFlightRun {
 export class ChatRunSocket {
   private nsp: ReturnType<Server['of']>
   private gatewayManager: any
-  /** sessionId → InFlightRun */
-  private activeRuns = new Map<string, InFlightRun>()
-  /** sessionId → accumulated state events for reconnecting clients */
-  private sessionStates = new Map<string, Array<{ event: string; data: any }>>()
+  /** sessionId → session state (messages, working status, events, run tracking) */
+  private sessionMap = new Map<string, SessionState>()
 
   constructor(io: Server, gatewayManager: any) {
     this.nsp = io.of('/chat-run')
@@ -76,23 +91,78 @@ export class ChatRunSocket {
       await this.handleRun(socket, data, profile)
     })
 
-    socket.on('resume', (data: { session_id?: string }) => {
-      if (data.session_id) {
-        const sid = data.session_id
-        const room = `session:${sid}`
-        socket.join(room)
+    socket.on('resume', async (data: { session_id?: string }) => {
+      if (!data.session_id) return
+      const sid = data.session_id
+      const room = `session:${sid}`
+      socket.join(room)
 
-        // Replay all accumulated state events for this session
-        const states = this.sessionStates.get(sid)
-        if (states) {
-          for (const state of states) {
-            socket.emit(state.event, { ...state.data, session_id: sid })
+      let state = this.sessionMap.get(sid)
+
+      // Not in memory — load from DB
+      if (!state) {
+        try {
+          const detail = await getSessionDetailFromDb(sid)
+          const messages = detail?.messages?.length
+            ? detail.messages
+                .filter(m => (m.role === 'user' || m.role === 'assistant' || m.role === 'tool') && m.content !== undefined)
+                .map(m => {
+                  const msg: any = {
+                    id: m.id,
+                    session_id: sid,
+                    role: m.role,
+                    content: m.content || '',
+                    timestamp: m.timestamp,
+                  }
+                  if (m.tool_calls?.length) msg.tool_calls = m.tool_calls
+                  if (m.tool_call_id) msg.tool_call_id = m.tool_call_id
+                  if (m.tool_name) msg.tool_name = m.tool_name
+                  if (m.reasoning) msg.reasoning = m.reasoning
+                  return msg
+                })
+            : []
+
+          // Calculate context tokens — aware of compression snapshot
+          let inputTokens: number
+          const snapshot = getCompressionSnapshot(sid)
+          if (snapshot) {
+            const newMessages = messages.slice(snapshot.lastMessageIndex + 1)
+            inputTokens = countTokens(SUMMARY_PREFIX + snapshot.summary) +
+              newMessages.reduce((sum, m) => sum + countTokens(m.content || ''), 0)
+          } else {
+            inputTokens = messages.reduce((sum, m) => sum + countTokens(m.content || ''), 0)
           }
-          logger.info('[chat-run-socket] replayed %d state events for reconnecting client on session %s', states.length, sid)
+          const outputTokens = messages
+            .filter(m => m.role === 'assistant')
+            .reduce((sum, m) => sum + countTokens(m.content || ''), 0)
+          state = {
+            messages,
+            isWorking: false,
+            events: [],
+            inputTokens,
+            outputTokens,
+          }
+          this.sessionMap.set(sid, state)
+          logger.info('[chat-run-socket] loaded session %s from DB (%d messages)', sid, messages.length)
+        } catch (err) {
+          logger.warn(err, '[chat-run-socket] failed to load session %s from DB on resume', sid)
+          state = { messages: [], isWorking: false, events: [] }
+          this.sessionMap.set(sid, state)
         }
-
-        logger.info('[chat-run-socket] socket %s resumed session %s (active: %s)', socket.id, sid, this.activeRuns.has(sid))
       }
+
+      // Reply with messages, working status + events (if working)
+      socket.emit('resumed', {
+        session_id: sid,
+        messages: state.messages,
+        isWorking: state.isWorking,
+        events: state.isWorking ? state.events : [],
+        inputTokens: state.inputTokens,
+        outputTokens: state.outputTokens,
+      })
+
+      logger.info('[chat-run-socket] socket %s resumed session %s (working: %s, messages: %d)',
+        socket.id, sid, state.isWorking, state.messages.length)
     })
 
     socket.on('abort', (data: { session_id?: string }) => {
@@ -113,8 +183,17 @@ export class ChatRunSocket {
     const upstream = (process.env.UPSTREAM || 'http://127.0.0.1:8642').replace(/\/$/, '')
     const apiKey = this.gatewayManager.getApiKey(profile) || undefined
 
-    // Join session room — events go to room, survives socket disconnect
+    // Mark working immediately on run start, and append user message
     if (session_id) {
+      const state = this.getOrCreateSession(session_id)
+      state.isWorking = true
+      state.messages.push({
+        id: state.messages.length + 1,
+        session_id,
+        role: 'user',
+        content: input,
+        timestamp: Math.floor(Date.now() / 1000),
+      })
       socket.join(`session:${session_id}`)
     }
 
@@ -357,6 +436,15 @@ export class ChatRunSocket {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
 
+      // Save input token count after compression (the actual context sent to model)
+      if (session_id && body.conversation_history) {
+        const state = this.sessionMap.get(session_id)
+        if (state) {
+          state.inputTokens = (body.conversation_history as any[]).reduce(
+            (sum, m) => sum + countTokens(m.content || ''), 0)
+        }
+      }
+
       const res = await fetch(`${upstream}/v1/runs`, {
         method: 'POST',
         headers,
@@ -383,7 +471,10 @@ export class ChatRunSocket {
 
       const abortController = new AbortController()
       if (session_id) {
-        this.activeRuns.set(session_id, { runId, abortController })
+        const state = this.getOrCreateSession(session_id)
+        state.isWorking = true
+        state.runId = runId
+        state.abortController = abortController
       }
 
       emit('run.started', { event: 'run.started', run_id: runId, status: runData.status })
@@ -398,11 +489,114 @@ export class ChatRunSocket {
         try {
           const parsed = JSON.parse(event.data as string)
 
-          // Intercept run.completed for usage tracking
-          if (parsed.event === 'run.completed' && parsed.usage && parsed.run_id) {
-            const sid = getSessionForRun(parsed.run_id)
+          // Track messages into sessionMap
+          if (session_id) {
+            const state = this.sessionMap.get(session_id)
+            if (state) {
+              const msgs = state.messages
+              const last = msgs[msgs.length - 1]
+
+              switch (parsed.event) {
+                case 'message.delta': {
+                  if (last?.role === 'assistant') {
+                    last.content += (parsed.delta || '')
+                  } else {
+                    msgs.push({
+                      id: msgs.length + 1,
+                      session_id,
+                      role: 'assistant',
+                      content: parsed.delta || '',
+                      timestamp: Math.floor(Date.now() / 1000),
+                    })
+                  }
+                  break
+                }
+                case 'reasoning.delta':
+                case 'thinking.delta': {
+                  const text = parsed.text || parsed.delta || ''
+                  if (!text) break
+                  if (last?.role === 'assistant') {
+                    last.reasoning = (last.reasoning || '') + text
+                  } else {
+                    msgs.push({
+                      id: msgs.length + 1,
+                      session_id,
+                      role: 'assistant',
+                      content: '',
+                      reasoning: text,
+                      timestamp: Math.floor(Date.now() / 1000),
+                    })
+                  }
+                  break
+                }
+                case 'tool.started': {
+                  msgs.push({
+                    id: msgs.length + 1,
+                    session_id,
+                    role: 'tool',
+                    content: '',
+                    tool_name: parsed.tool || parsed.name || null,
+                    timestamp: Math.floor(Date.now() / 1000),
+                  })
+                  break
+                }
+                case 'tool.completed': {
+                  const toolMsg = [...msgs].reverse().find(m => m.role === 'tool')
+                  if (toolMsg) {
+                    // tool_name already set by tool.started
+                  }
+                  break
+                }
+                case 'run.completed': {
+                  // Finalize assistant message — if no content was streamed, use output
+                  if (parsed.output && !runProducedAssistantText(msgs)) {
+                    if (last?.role === 'assistant') {
+                      last.content = parsed.output
+                    } else {
+                      msgs.push({
+                        id: msgs.length + 1,
+                        session_id,
+                        role: 'assistant',
+                        content: parsed.output,
+                        timestamp: Math.floor(Date.now() / 1000),
+                      })
+                    }
+                  }
+                  break
+                }
+              }
+            }
+          }
+
+          // Track usage — recalculate with current snapshot + full messages
+          if (parsed.event === 'run.completed') {
+            const sid = session_id
             if (sid) {
-              updateUsage(sid, parsed.usage.input_tokens, parsed.usage.output_tokens)
+              const state = this.sessionMap.get(sid)
+              if (state) {
+                const snapshot = getCompressionSnapshot(sid)
+                let inputTokens: number
+                if (snapshot) {
+                  const newMessages = state.messages.slice(snapshot.lastMessageIndex + 1)
+                  inputTokens = countTokens(SUMMARY_PREFIX + snapshot.summary) +
+                    newMessages.reduce((sum, m) => sum + countTokens(m.content || ''), 0)
+                } else {
+                  inputTokens = state.messages.reduce((sum, m) => sum + countTokens(m.content || ''), 0)
+                }
+                const outputTokens = state.messages
+                  .filter(m => m.role === 'assistant')
+                  .reduce((sum, m) => sum + countTokens(m.content || ''), 0)
+                state.inputTokens = inputTokens
+                state.outputTokens = outputTokens
+                updateUsage(sid, inputTokens, outputTokens)
+                // Emit updated usage to all clients in the room
+                emit('usage.updated', {
+                  event: 'usage.updated',
+                  session_id: sid,
+                  inputTokens,
+                  outputTokens,
+                })
+              }
             }
           }
 
@@ -429,39 +623,55 @@ export class ChatRunSocket {
   // --- Abort handler ---
 
   private handleAbort(sessionId: string) {
-    const run = this.activeRuns.get(sessionId)
-    if (run) {
-      run.abortController.abort()
-      this.markCompleted(sessionId, { event: 'run.failed', run_id: run.runId })
+    const state = this.sessionMap.get(sessionId)
+    if (state?.isWorking && state.abortController) {
+      state.abortController.abort()
+      this.markCompleted(sessionId, { event: 'run.failed', run_id: state.runId })
     }
   }
 
   /** Mark a session run as completed/failed so reconnecting clients get notified */
-  private markCompleted(sessionId: string, info: { event: string; run_id?: string }) {
-    this.activeRuns.delete(sessionId)
-    this.pushState(sessionId, info.event, { event: info.event, run_id: info.run_id })
-    // Auto-cleanup after 30s — enough time for a page refresh
-    setTimeout(() => this.sessionStates.delete(sessionId), 30_000)
+  private markCompleted(sessionId: string, _info: { event: string; run_id?: string }) {
+    const state = this.sessionMap.get(sessionId)
+    if (state) {
+      state.isWorking = false
+      state.abortController = undefined
+      state.runId = undefined
+      state.events = []
+    }
+  }
+
+  /** Get or create session state in sessionMap */
+  private getOrCreateSession(sessionId: string): SessionState {
+    let state = this.sessionMap.get(sessionId)
+    if (!state) {
+      state = { messages: [], isWorking: false, events: [] }
+      this.sessionMap.set(sessionId, state)
+    }
+    return state
   }
 
   /** Append a state event for a session (used for replay on reconnect) */
   private pushState(sessionId: string, event: string, data: any) {
-    if (!this.sessionStates.has(sessionId)) {
-      this.sessionStates.set(sessionId, [])
-    }
-    this.sessionStates.get(sessionId)!.push({ event, data })
+    const state = this.getOrCreateSession(sessionId)
+    state.events.push({ event, data })
   }
 
   /** Replace the last state with the same event name, or append if different */
   private replaceState(sessionId: string, event: string, data: any) {
-    const states = this.sessionStates.get(sessionId)
-    if (states) {
-      const idx = states.findIndex(s => s.event === event)
+    const state = this.sessionMap.get(sessionId)
+    if (state) {
+      const idx = state.events.findIndex(s => s.event === event)
       if (idx >= 0) {
-        states[idx] = { event, data }
+        state.events[idx] = { event, data }
         return
       }
     }
     this.pushState(sessionId, event, data)
   }
+}
+
+/** Check if any assistant message in the list has non-empty content */
+function runProducedAssistantText(messages: SessionMessage[]): boolean {
+  return messages.some(m => m.role === 'assistant' && m.content?.trim())
 }

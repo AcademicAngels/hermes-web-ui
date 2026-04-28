@@ -89,6 +89,21 @@ export function disconnectChatRun(): void {
  * Start a chat run via Socket.IO and stream events back.
  * Returns an AbortController-compatible handle for cancellation.
  */
+/**
+ * Resume a session via Socket.IO. Returns messages, working status, and events.
+ */
+export function resumeSession(
+  sessionId: string,
+  onResumed: (data: { session_id: string; messages: any[]; isWorking: boolean; events: any[] }) => void,
+): Socket {
+  const socket = connectChatRun()
+
+  socket.once('resumed', onResumed)
+  socket.emit('resume', { session_id: sessionId })
+
+  return socket
+}
+
 export function startRunViaSocket(
   body: StartRunRequest,
   onEvent: (event: RunEvent) => void,
@@ -113,6 +128,7 @@ export function startRunViaSocket(
     socket.off('run.completed', onRunCompleted)
     socket.off('compression.started', onCompressionStarted)
     socket.off('compression.completed', onCompressionCompleted)
+    socket.off('usage.updated', onUsageUpdated)
   }
 
   // All event handlers share the same cleanup logic
@@ -142,6 +158,7 @@ export function startRunViaSocket(
   function onRunCompleted(data: RunEvent) { handleEvent(data) }
   function onCompressionStarted(data: RunEvent) { handleEvent(data) }
   function onCompressionCompleted(data: RunEvent) { handleEvent(data) }
+  function onUsageUpdated(data: RunEvent) { handleEvent(data) }
 
   socket.on('run.started', onRunStarted)
   socket.on('run.failed', onRunFailed)
@@ -154,6 +171,7 @@ export function startRunViaSocket(
   socket.on('run.completed', onRunCompleted)
   socket.on('compression.started', onCompressionStarted)
   socket.on('compression.completed', onCompressionCompleted)
+  socket.on('usage.updated', onUsageUpdated)
 
   // Emit run:start with ack callback to get run_id
   socket.emit('run', body)

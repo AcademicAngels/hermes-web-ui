@@ -79,9 +79,6 @@ function sourceSortKey(source: string): number {
 
 function sortSessionsWithActiveFirst(items: Session[]): Session[] {
   return [...items].sort((a, b) => {
-    const aLive = chatStore.isSessionLive(a.id)
-    const bLive = chatStore.isSessionLive(b.id)
-    if (aLive !== bLive) return aLive ? -1 : 1
     return (b.updatedAt || 0) - (a.updatedAt || 0)
   })
 }
@@ -107,9 +104,6 @@ const groupedSessions = computed<SessionGroup[]>(() => {
   }
 
   const keys = [...map.keys()].sort((a, b) => {
-    const aHasLive = map.get(a)?.some(s => chatStore.isSessionLive(s.id)) || false
-    const bHasLive = map.get(b)?.some(s => chatStore.isSessionLive(s.id)) || false
-    if (aHasLive !== bHasLive) return aHasLive ? -1 : 1
     const ka = sourceSortKey(a)
     const kb = sourceSortKey(b)
     if (ka !== kb) return ka - kb
@@ -288,7 +282,6 @@ async function handleRenameConfirm() {
             :key="`pinned-${s.id}`"
             :session="s"
             :active="s.id === chatStore.activeSessionId"
-            :live="chatStore.isSessionLive(s.id)"
             :pinned="true"
             :can-delete="s.id !== chatStore.activeSessionId || chatStore.sessions.length > 1"
             @select="handleSessionClick(s.id)"
@@ -309,7 +302,6 @@ async function handleRenameConfirm() {
               :key="s.id"
               :session="s"
               :active="s.id === chatStore.activeSessionId"
-              :live="chatStore.isSessionLive(s.id)"
               :pinned="false"
               :can-delete="s.id !== chatStore.activeSessionId || chatStore.sessions.length > 1"
               @select="handleSessionClick(s.id)"
@@ -587,10 +579,6 @@ async function handleRenameConfirm() {
   &.active .session-item-title {
     color: $accent-primary;
   }
-
-  &.live .session-item-title {
-    color: $accent-primary;
-  }
 }
 
 :deep(.session-item-content) {
@@ -613,47 +601,6 @@ async function handleRenameConfirm() {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-:deep(.session-item-active-indicator) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: $accent-primary;
-}
-
-:deep(.session-item-active-spinner) {
-  animation: session-spin 1.1s linear infinite;
-}
-
-:deep(.session-item-live-badge) {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: 10px;
-  line-height: 16px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: $accent-primary;
-  background: rgba(var(--accent-primary-rgb), 0.10);
-}
-
-:deep(.live-dot) {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: $accent-primary;
-  animation: live-pulse 2s ease-in-out infinite;
-}
-
-@keyframes live-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.7); }
 }
 
 :deep(.session-item-pin) {
@@ -704,16 +651,6 @@ async function handleRenameConfirm() {
   &:hover {
     color: $error;
     background: rgba($error, 0.1);
-  }
-}
-
-@keyframes session-spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
   }
 }
 
