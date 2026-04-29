@@ -143,6 +143,7 @@ export class ContextEngine {
                 newMessages,
                 input.upstream,
                 input.apiKey,
+                input.profile || 'default',
                 snapshot.summary,
             )
             const elapsed = Date.now() - t0
@@ -192,6 +193,7 @@ export class ContextEngine {
             messages,
             input.upstream,
             input.apiKey,
+            input.profile || 'default',
         )
         const elapsed = Date.now() - t0
 
@@ -229,7 +231,7 @@ export class ContextEngine {
      * Force compress all messages in a room (full compression).
      * Used when user manually triggers compression.
      */
-    async forceCompress(roomId: string): Promise<string> {
+    async forceCompress(roomId: string, profile?: string): Promise<string> {
         const allMessages = this.messageFetcher.getMessages(roomId)
         if (allMessages.length === 0) return ''
 
@@ -237,7 +239,7 @@ export class ContextEngine {
         logger.debug(`[ContextEngine] forceCompress room=${roomId}, messages=${allMessages.length}`)
 
         const t0 = Date.now()
-        const result = await this.summarize(roomId, allMessages, this._upstream, this._apiKey)
+        const result = await this.summarize(roomId, allMessages, this._upstream, this._apiKey, profile || 'default')
         const elapsed = Date.now() - t0
 
         if (result.summary) {
@@ -286,6 +288,7 @@ export class ContextEngine {
         messages: StoredMessage[],
         upstream: string,
         apiKey: string | null,
+        profile: string,
         previousSummary?: string,
     ): Promise<{ summary: string | null; sessionId: string | null }> {
         if (messages.length === 0 && !previousSummary) return { summary: null, sessionId: null }
@@ -296,6 +299,8 @@ export class ContextEngine {
                 apiKey,
                 buildSummarizationSystemPrompt(),
                 messages,
+                roomId,
+                profile,
                 previousSummary,
             )
             return { summary: result.summary, sessionId: result.sessionId }

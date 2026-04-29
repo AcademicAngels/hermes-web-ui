@@ -81,6 +81,8 @@ export interface GatewayCaller {
         apiKey: string | null,
         systemPrompt: string,
         messages: StoredMessage[],
+        roomId: string,
+        profile: string,
         previousSummary?: string,
     ): Promise<{ summary: string; sessionId: string }>
 }
@@ -108,4 +110,5 @@ export interface BuildContextInput {
     apiKey: string | null
     currentMessage: StoredMessage
     compression?: Partial<CompressionConfig>
+    profile?: string
 }

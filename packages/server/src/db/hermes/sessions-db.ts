@@ -1,4 +1,4 @@
-import { getActiveProfileDir } from '../../services/hermes/hermes-profile'
+import { getActiveProfileDir, getProfileDir } from '../../services/hermes/hermes-profile'
 
 const SQLITE_AVAILABLE = (() => {
   const [major, minor] = process.versions.node.split('.').map(Number)
@@ -612,6 +612,47 @@ export async function getSessionMessagesFromDb(sessionId: string): Promise<{
 
 export async function getSessionDetailFromDb(sessionId: string): Promise<HermesSessionDetailRow | null> {
   const db = await openSessionDb()
+  try {
+    const idx = loadAllSessions(db)
+    const requested = idx.byId.get(sessionId) || null
+    if (!requested) return null
+
+    const chain = collectSessionChainForMatchedSession(requested, idx)
+    if (!chain.length) return null
+
+    const ids = chain.map(session => session.id)
+    const placeholders = ids.map(() => '?').join(', ')
+    const messageRows = db.prepare(`
+      SELECT
+        id,
+        session_id,
+        role,
+        content,
+        tool_call_id,
+        tool_calls,
+        tool_name,
+        timestamp,
+        token_count,
+        finish_reason,
+        reasoning,
+        reasoning_details,
+        codex_reasoning_items,
+        reasoning_content
+      FROM messages
+      WHERE session_id IN (${placeholders})
+      ORDER BY timestamp, id
+    `).all(...ids) as Record<string, unknown>[]
+    const messages = messageRows.map(mapMessageRow)
+    return aggregateSessionDetail(chain, messages, sessionId)
+  } finally {
+    db.close()
+  }
+}
+
+export async function getSessionDetailFromDbWithProfile(sessionId: string, profile: string): Promise<HermesSessionDetailRow | null> {
+  const { DatabaseSync } = await import('node:sqlite')
+  const dbPath = `${getProfileDir(profile)}/state.db`
+  const db = new DatabaseSync(dbPath, { open: true, readOnly: true })
   try {
     const idx = loadAllSessions(db)
     const requested = idx.byId.get(sessionId) || null
