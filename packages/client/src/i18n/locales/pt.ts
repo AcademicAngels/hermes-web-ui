@@ -227,6 +227,26 @@ export default {
     soul: 'Alma',
     noSoul: 'Nenhuma configuracao de alma ainda.',
     soulPlaceholder: 'Escreva a configuracao da alma...',
+    fileMemory: 'Memoria de arquivos',
+    semanticMemory: 'Memoria semantica',
+  },
+
+  // Hindsight
+  hindsight: {
+    status: 'Status',
+    online: 'Online',
+    offline: 'Offline',
+    banks: 'Bancos de memoria',
+    search: 'Buscar memorias',
+    searchPlaceholder: 'O que voce quer lembrar?',
+    recall: 'Lembrar',
+    reflect: 'Refletir',
+    noResults: 'Nenhuma memoria encontrada',
+    addMemory: 'Adicionar memoria',
+    retainPlaceholder: 'Digite o conteudo da memoria...',
+    contextPlaceholder: 'Contexto (opcional)',
+    retain: 'Reter',
+    retained: 'Memoria retida',
   },
 
   // Models
@@ -417,6 +437,20 @@ export default {
       charLimitHint: 'Maximo de caracteres para MEMORY.md',
       userCharLimit: 'Limite de caracteres do perfil do usuario',
       userCharLimitHint: 'Maximo de caracteres para USER.md',
+    },
+    hindsight: {
+      title: 'Hindsight Memoria Semantica',
+      enabled: 'Ativar Hindsight',
+      enabledHint: 'Quando ativado, desativa a ferramenta de memoria integrada para evitar conflitos',
+      embeddingProvider: 'Provedor de Embedding',
+      embeddingProviderHint: 'Provedor para embeddings de texto',
+      embeddingBaseUrl: 'URL base de Embedding',
+      embeddingBaseUrlHint: 'Endpoint de embedding compativel com OpenAI',
+      embeddingModel: 'Modelo de Embedding',
+      testConnection: 'Conexao',
+      test: 'Testar',
+      connectionOk: 'Hindsight conectado',
+      connectionFailed: 'Nao foi possivel conectar ao Hindsight',
     },
     session: {
       mode: 'Modo de reinicializacao',

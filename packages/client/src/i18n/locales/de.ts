@@ -227,6 +227,26 @@ export default {
     soul: 'Seele',
     noSoul: 'Noch keine Seelenkonfiguration.',
     soulPlaceholder: 'Seelenkonfiguration schreiben...',
+    fileMemory: 'Dateigedachtnis',
+    semanticMemory: 'Semantisches Gedachtnis',
+  },
+
+  // Hindsight
+  hindsight: {
+    status: 'Status',
+    online: 'Online',
+    offline: 'Offline',
+    banks: 'Gedachtnisbanken',
+    search: 'Erinnerungen suchen',
+    searchPlaceholder: 'Was mochten Sie sich erinnern?',
+    recall: 'Erinnern',
+    reflect: 'Reflektieren',
+    noResults: 'Keine Erinnerungen gefunden',
+    addMemory: 'Erinnerung hinzufugen',
+    retainPlaceholder: 'Erinnerungsinhalt eingeben...',
+    contextPlaceholder: 'Kontext (optional)',
+    retain: 'Speichern',
+    retained: 'Erinnerung gespeichert',
   },
 
   // Models
@@ -417,6 +437,20 @@ export default {
       charLimitHint: 'Maximale Zeichen fur MEMORY.md',
       userCharLimit: 'Zeichenlimit fur Benutzerprofil',
       userCharLimitHint: 'Maximale Zeichen fur USER.md',
+    },
+    hindsight: {
+      title: 'Hindsight Semantisches Gedachtnis',
+      enabled: 'Hindsight aktivieren',
+      enabledHint: 'Bei Aktivierung wird das integrierte Gedachtnistool deaktiviert, um Konflikte zu vermeiden',
+      embeddingProvider: 'Embedding-Anbieter',
+      embeddingProviderHint: 'Anbieter fur Texteinbettungen',
+      embeddingBaseUrl: 'Embedding-Basis-URL',
+      embeddingBaseUrlHint: 'OpenAI-kompatibler Embedding-Endpunkt',
+      embeddingModel: 'Embedding-Modell',
+      testConnection: 'Verbindung',
+      test: 'Testen',
+      connectionOk: 'Hindsight verbunden',
+      connectionFailed: 'Verbindung zu Hindsight nicht moglich',
     },
     session: {
       mode: 'Zurucksetzungsmodus',

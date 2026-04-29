@@ -250,6 +250,26 @@ export default {
     soul: 'Soul',
     noSoul: 'No soul configuration yet.',
     soulPlaceholder: 'Write soul configuration...',
+    fileMemory: 'File Memory',
+    semanticMemory: 'Semantic Memory',
+  },
+
+  // Hindsight
+  hindsight: {
+    status: 'Status',
+    online: 'Online',
+    offline: 'Offline',
+    banks: 'Banks',
+    search: 'Search Memories',
+    searchPlaceholder: 'What do you want to recall?',
+    recall: 'Recall',
+    reflect: 'Reflect',
+    noResults: 'No memories found',
+    addMemory: 'Add Memory',
+    retainPlaceholder: 'Enter memory content...',
+    contextPlaceholder: 'Context (optional)',
+    retain: 'Retain',
+    retained: 'Memory retained',
   },
 
   // Models
@@ -458,6 +478,20 @@ export default {
       charLimitHint: 'Max characters for MEMORY.md',
       userCharLimit: 'User Profile Char Limit',
       userCharLimitHint: 'Max characters for USER.md',
+    },
+    hindsight: {
+      title: 'Hindsight Semantic Memory',
+      enabled: 'Enable Hindsight',
+      enabledHint: 'When enabled, disables built-in memory tool to avoid conflicts',
+      embeddingProvider: 'Embedding Provider',
+      embeddingProviderHint: 'Provider for text embeddings',
+      embeddingBaseUrl: 'Embedding Base URL',
+      embeddingBaseUrlHint: 'OpenAI-compatible embedding endpoint',
+      embeddingModel: 'Embedding Model',
+      testConnection: 'Connection',
+      test: 'Test',
+      connectionOk: 'Hindsight connected',
+      connectionFailed: 'Cannot connect to Hindsight',
     },
     session: {
       mode: 'Reset Mode',
