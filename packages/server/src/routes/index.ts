@@ -12,6 +12,7 @@ import { sessionRoutes } from './hermes/sessions'
 import { profileRoutes } from './hermes/profiles'
 import { skillRoutes } from './hermes/skills'
 import { memoryRoutes } from './hermes/memory'
+import { hindsightRoutes } from './hermes/hindsight'
 import { modelRoutes } from './hermes/models'
 import { providerRoutes } from './hermes/providers'
 import { configRoutes } from './hermes/config'
@@ -49,6 +50,7 @@ export function registerRoutes(app: any, requireAuth: (ctx: Context, next: Next)
   app.use(profileRoutes.routes())
   app.use(skillRoutes.routes())
   app.use(memoryRoutes.routes())
+  app.use(hindsightRoutes.routes())
   app.use(modelRoutes.routes())
   app.use(providerRoutes.routes())
   app.use(configRoutes.routes())
