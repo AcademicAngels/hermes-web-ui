@@ -1,5 +1,6 @@
 import { config } from '../../config'
 import { createHindsightClient } from '../../services/hermes/hindsight-client'
+import { toggleMemoryTool } from '../../services/hermes/hermes-cli'
 
 const client = createHindsightClient(config.hindsightUrl)
 
@@ -64,5 +65,18 @@ export async function reflect(ctx: any) {
     ctx.body = await client.reflect({ query, bank_id, budget, max_tokens, tags })
   } catch (err: any) {
     ctx.status = 502; ctx.body = { error: err.message }
+  }
+}
+
+export async function toggleEnabled(ctx: any) {
+  const { enabled } = ctx.request.body as { enabled: boolean }
+  if (typeof enabled !== 'boolean') {
+    ctx.status = 400; ctx.body = { error: 'Missing enabled boolean' }; return
+  }
+  try {
+    await toggleMemoryTool(!enabled)
+    ctx.body = { success: true, hindsight_enabled: enabled, memory_tool_enabled: !enabled }
+  } catch (err: any) {
+    ctx.status = 500; ctx.body = { error: err.message }
   }
 }

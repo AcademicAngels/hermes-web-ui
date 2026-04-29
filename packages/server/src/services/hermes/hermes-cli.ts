@@ -574,3 +574,12 @@ export async function importProfile(archivePath: string, name?: string): Promise
     throw new Error(`Failed to import profile: ${err.message}`)
   }
 }
+
+export async function toggleMemoryTool(enable: boolean): Promise<string> {
+  const action = enable ? 'enable' : 'disable'
+  const { stdout } = await execFileAsync(HERMES_BIN, ['tools', action, 'memory'], {
+    timeout: 10000,
+    ...execOpts,
+  })
+  return stdout.trim()
+}
