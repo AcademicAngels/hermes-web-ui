@@ -49,18 +49,10 @@ export async function bootstrap() {
   await initGatewayManager()
   console.log('[bootstrap] gateway manager initialized')
 
-  // Initialize web-ui SQLite tables
-  const { initUsageStore } = await import('./db/hermes/usage-store')
-  initUsageStore()
-  console.log('[bootstrap] usage store initialized')
-
-  const { initSessionStore } = await import('./db/hermes/session-store')
-  initSessionStore()
-  console.log('[bootstrap] session store initialized')
-
-  const { initCompressionSnapshotStore } = await import('./db/hermes/compression-snapshot')
-  initCompressionSnapshotStore()
-  console.log('[bootstrap] compression snapshot store initialized')
+  // Initialize all web-ui SQLite tables
+  const { initAllStores } = await import('./db/hermes/init')
+  await initAllStores()
+  console.log('[bootstrap] all stores initialized')
 
   app.use(cors({ origin: config.corsOrigins }))
   app.use(bodyParser())

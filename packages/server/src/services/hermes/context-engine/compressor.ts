@@ -245,7 +245,6 @@ export class ContextEngine {
         if (result.summary) {
             const { tailMessageCount } = config
             const toCompress = allMessages.length > tailMessageCount ? allMessages.slice(0, -tailMessageCount) : allMessages
-            const tail = allMessages.length > tailMessageCount ? allMessages.slice(-tailMessageCount) : []
             const lastCompressedMsg = toCompress[toCompress.length - 1]
 
             this.messageFetcher.saveContextSnapshot(roomId, result.summary, lastCompressedMsg.id, lastCompressedMsg.timestamp)
@@ -340,15 +339,15 @@ export class ContextEngine {
     }
 
     private estimateTokensFromMessages(messages: StoredMessage[]): number {
-        const text = messages.map(m => m.content + m.senderName).join('')
+        const text = messages.map(m => m.content).join('')
         return this.countTokens(text)
     }
 
-    /** Estimate tokens distinguishing CJK (~1.5 tok/char) from Latin (~0.25 tok/char) */
+    /** Estimate tokens distinguishing CJK (~1.5 tok/char) from Latin (config.charsPerToken per char) */
     private countTokens(text: string): number {
         const cjk = (text.match(/[\u2e80-\u9fff\uac00-\ud7af\u3000-\u303f\uff00-\uffef]/g) || []).length
         const other = text.length - cjk
-        return Math.ceil(cjk * 1.5 + other / 4)
+        return Math.ceil(cjk * 1.5 + other / this.config.charsPerToken)
     }
 
     /** Log assembled history for debugging */

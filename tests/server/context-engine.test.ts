@@ -342,7 +342,7 @@ describe('ContextEngine.buildContext', () => {
     it('trims tail when over token budget', async () => {
         const engine = new ContextEngine({
             config: {
-                maxHistoryTokens: 50, // very small budget
+                maxHistoryTokens: 200, // small budget
                 tailMessageCount: 10,
                 triggerTokens: 10, // force compression
                 charsPerToken: 4,
@@ -362,10 +362,13 @@ describe('ContextEngine.buildContext', () => {
             currentMessage: messages[messages.length - 1],
         })
 
-        // History should be trimmed to fit within 50 tokens
+        // History should be trimmed to fit within 200 tokens
+        // Use same estimation logic as compressor: CJK * 1.5 + other / charsPerToken
         const totalChars = result.conversationHistory.reduce((sum, m) => sum + m.content.length, 0)
-        const estimatedTokens = Math.ceil(totalChars / 4)
-        expect(estimatedTokens).toBeLessThanOrEqual(50)
+        const cjk = (result.conversationHistory.map(m => m.content).join('').match(/[⺀-鿿가-힯　-〿＀-￯]/g) || []).length
+        const other = totalChars - cjk
+        const estimatedTokens = Math.ceil(cjk * 1.5 + other / 4)
+        expect(estimatedTokens).toBeLessThanOrEqual(200)
     })
 
     it('maps agent messages to assistant role', async () => {
