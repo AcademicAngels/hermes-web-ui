@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { NButton, useMessage } from 'naive-ui'
+import { NButton, NTabs, NTabPane, useMessage } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 import MarkdownRenderer from '@/components/hermes/chat/MarkdownRenderer.vue'
+import HindsightPanel from '@/components/hermes/memory/HindsightPanel.vue'
 import { fetchMemory, saveMemory, type MemoryData } from '@/api/hermes/skills'
 
 const { t } = useI18n()
@@ -12,6 +13,7 @@ const data = ref<MemoryData | null>(null)
 const editingSection = ref<'memory' | 'user' | 'soul' | null>(null)
 const editContent = ref('')
 const saving = ref(false)
+const activeTab = ref('file')
 
 onMounted(loadMemory)
 
@@ -88,6 +90,8 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
     </header>
 
     <div class="memory-content">
+      <NTabs v-model:value="activeTab" type="line" animated>
+        <NTabPane name="file" :tab="t('memory.fileMemory')">
       <div v-if="loading && !data" class="memory-loading">{{ t('common.loading') }}</div>
       <div v-else class="memory-sections">
           <!-- My Notes -->
@@ -229,6 +233,11 @@ const displaySoul = computed(() => (data.value?.soul || '').replace(/§/g, '\n\n
             </div>
           </div>
         </div>
+        </NTabPane>
+        <NTabPane name="semantic" :tab="t('memory.semanticMemory')">
+          <HindsightPanel />
+        </NTabPane>
+      </NTabs>
     </div>
   </div>
 </template>
