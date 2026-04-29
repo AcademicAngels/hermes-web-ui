@@ -83,6 +83,7 @@ export class SessionDeleter {
         const ok = await hermesDeleteSession(row.session_id)
         if (ok) {
           db.prepare('DELETE FROM gc_pending_session_deletes WHERE session_id = ?').run(row.session_id)
+          db.prepare('DELETE FROM gc_session_profiles WHERE session_id = ?').run(row.session_id)
           deleted.push(row.session_id)
         } else {
           skipped.push(row.session_id)

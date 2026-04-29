@@ -137,7 +137,18 @@ export function getUsageBatch(sessionIds: string[]): Record<string, UsageRecord>
        WHERE id IN (SELECT MAX(id) FROM ${TABLE} WHERE session_id IN (${placeholders}) GROUP BY session_id)`,
     ).all(...sessionIds) as unknown as Array<UsageRecord & { session_id: string }>
     const map: Record<string, UsageRecord> = {}
-    for (const r of rows) map[r.session_id] = r
+    for (const r of rows) {
+      map[r.session_id] = {
+        input_tokens: r.input_tokens,
+        output_tokens: r.output_tokens,
+        cache_read_tokens: r.cache_read_tokens,
+        cache_write_tokens: r.cache_write_tokens,
+        reasoning_tokens: r.reasoning_tokens,
+        model: r.model,
+        profile: r.profile,
+        created_at: r.created_at,
+      }
+    }
     return map
   }
   const all = jsonGetAll(TABLE)

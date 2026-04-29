@@ -99,7 +99,7 @@ const SSE_EVENTS_PATH = /^\/v1\/runs\/([^/]+)\/events$/
  * Parse SSE text chunks and extract run.completed events.
  * Returns the run_id if a run.completed was found.
  */
-function extractRunCompletedFromChunk(chunk: string): string | null {
+function extractRunCompletedFromChunk(chunk: string, profile: string): string | null {
   // SSE format: each line is "data: {...}\n\n"
   const lines = chunk.split('\n')
   for (const line of lines) {
@@ -116,6 +116,7 @@ function extractRunCompletedFromChunk(chunk: string): string | null {
             cacheWriteTokens: data.usage.cache_write_tokens,
             reasoningTokens: data.usage.reasoning_tokens,
             model: data.model || '',
+            profile,
           })
           return data.run_id
         }
@@ -128,7 +129,7 @@ function extractRunCompletedFromChunk(chunk: string): string | null {
 /**
  * Stream an SSE response while intercepting run.completed events.
  */
-async function streamSSE(ctx: Context, res: Response): Promise<void> {
+async function streamSSE(ctx: Context, res: Response, profile: string): Promise<void> {
   if (!res.body) {
     ctx.res.end()
     return
@@ -154,13 +155,13 @@ async function streamSSE(ctx: Context, res: Response): Promise<void> {
       while ((newlineIdx = buffer.indexOf('\n\n')) !== -1) {
         const eventBlock = buffer.slice(0, newlineIdx)
         buffer = buffer.slice(newlineIdx + 2)
-        extractRunCompletedFromChunk(eventBlock)
+        extractRunCompletedFromChunk(eventBlock, profile)
       }
     }
 
     // Process remaining buffer
     if (buffer.trim()) {
-      extractRunCompletedFromChunk(buffer)
+      extractRunCompletedFromChunk(buffer, profile)
     }
   } finally {
     ctx.res.end()
@@ -239,7 +240,7 @@ export async function proxy(ctx: Context) {
     // Intercept SSE streams for /v1/runs/{id}/events
     const sseMatch = upstreamPath.match(SSE_EVENTS_PATH)
     if (sseMatch) {
-      await streamSSE(ctx, res)
+      await streamSSE(ctx, res, profile)
       return
     }
 

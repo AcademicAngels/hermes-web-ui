@@ -289,9 +289,12 @@ describe('ContextEngine.buildContext', () => {
         })
 
         expect(mockSummarize).toHaveBeenCalledTimes(1)
-        // First call: no previousSummary (4 args, index 4 is undefined)
+        // First call: no previousSummary
+        // GatewayCaller.summarize signature: upstream, apiKey, systemPrompt, messages, roomId, profile, previousSummary
         const firstCallArgs = mockSummarize.mock.calls[0]
-        expect(firstCallArgs[4]).toBeUndefined() // previousSummary not passed
+        expect(firstCallArgs[4]).toBe('room-1') // roomId
+        expect(firstCallArgs[5]).toBe('default') // profile
+        expect(firstCallArgs[6]).toBeUndefined() // previousSummary not passed
 
         // Insert a new message
         const middleInsert = makeMessage({
@@ -313,7 +316,7 @@ describe('ContextEngine.buildContext', () => {
         expect(mockSummarize).toHaveBeenCalledTimes(2)
         // Second call: has previousSummary
         const secondCallArgs = mockSummarize.mock.calls[1]
-        expect(secondCallArgs[4]).toBe('Summary of conversation.')
+        expect(secondCallArgs[6]).toBe('Summary of conversation.')
     })
 
     it('falls back to no-summary on LLM failure', async () => {
