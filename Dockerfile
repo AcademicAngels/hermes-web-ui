@@ -26,6 +26,9 @@ RUN npm install --ignore-scripts && npm rebuild node-pty
 
 COPY . .
 
+RUN npm rebuild node-pty --build-from-source \
+    && node -e "require('node-pty')"
+
 RUN npm run build && npm prune --omit=dev
 
 ENV NODE_ENV=production

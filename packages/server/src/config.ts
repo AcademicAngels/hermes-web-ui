@@ -9,4 +9,5 @@ export const config = {
   corsOrigins: process.env.CORS_ORIGINS || '*',
   /** Session store: 'local' (self-built SQLite) or 'remote' (Hermes CLI) */
   sessionStore: (process.env.SESSION_STORE || 'local') as 'local' | 'remote',
+  hindsightUrl: process.env.HINDSIGHT_URL || 'http://hindsight:8888',
 }

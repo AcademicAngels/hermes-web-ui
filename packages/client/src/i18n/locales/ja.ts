@@ -227,6 +227,26 @@ export default {
     soul: 'ソウル',
     noSoul: 'ソウル設定はまだありません。',
     soulPlaceholder: 'ソウル設定を入力...',
+    fileMemory: 'ファイルメモリ',
+    semanticMemory: 'セマンティックメモリ',
+  },
+
+  // Hindsight
+  hindsight: {
+    status: 'ステータス',
+    online: 'オンライン',
+    offline: 'オフライン',
+    banks: 'メモリバンク',
+    search: '記憶を検索',
+    searchPlaceholder: '何を思い出したいですか？',
+    recall: '想起',
+    reflect: '推論',
+    noResults: '記憶が見つかりません',
+    addMemory: '記憶を追加',
+    retainPlaceholder: '記憶の内容を入力...',
+    contextPlaceholder: 'コンテキスト（任意）',
+    retain: '保存',
+    retained: '記憶を保存しました',
   },
 
   // モデル
@@ -417,6 +437,20 @@ export default {
       charLimitHint: 'MEMORY.md の最大文字数',
       userCharLimit: 'ユーザープロファイル文字数上限',
       userCharLimitHint: 'USER.md の最大文字数',
+    },
+    hindsight: {
+      title: 'Hindsight セマンティックメモリ',
+      enabled: 'Hindsight を有効化',
+      enabledHint: '有効にすると、競合を避けるために組み込みメモリツールが無効になります',
+      embeddingProvider: 'Embedding プロバイダー',
+      embeddingProviderHint: 'テキスト埋め込みのプロバイダー',
+      embeddingBaseUrl: 'Embedding ベース URL',
+      embeddingBaseUrlHint: 'OpenAI 互換の Embedding エンドポイント',
+      embeddingModel: 'Embedding モデル',
+      testConnection: '接続',
+      test: 'テスト',
+      connectionOk: 'Hindsight に接続しました',
+      connectionFailed: 'Hindsight に接続できません',
     },
     session: {
       mode: 'リセットモード',

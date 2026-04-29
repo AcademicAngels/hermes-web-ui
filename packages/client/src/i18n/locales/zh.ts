@@ -250,6 +250,26 @@ export default {
     soul: '灵魂',
     noSoul: '暂无灵魂配置。',
     soulPlaceholder: '输入灵魂配置...',
+    fileMemory: '文件记忆',
+    semanticMemory: '语义记忆',
+  },
+
+  // Hindsight
+  hindsight: {
+    status: '状态',
+    online: '在线',
+    offline: '离线',
+    banks: '记忆库',
+    search: '搜索记忆',
+    searchPlaceholder: '你想回忆什么？',
+    recall: '回忆',
+    reflect: '推理',
+    noResults: '未找到记忆',
+    addMemory: '添加记忆',
+    retainPlaceholder: '输入记忆内容...',
+    contextPlaceholder: '上下文（可选）',
+    retain: '存储',
+    retained: '记忆已存储',
   },
 
   // 模型
@@ -450,6 +470,20 @@ export default {
       charLimitHint: 'MEMORY.md 最大字符数',
       userCharLimit: '用户画像字符上限',
       userCharLimitHint: 'USER.md 最大字符数',
+    },
+    hindsight: {
+      title: 'Hindsight 语义记忆',
+      enabled: '启用 Hindsight',
+      enabledHint: '启用后将禁用内置记忆工具以避免冲突',
+      embeddingProvider: 'Embedding 提供者',
+      embeddingProviderHint: '文本嵌入提供者',
+      embeddingBaseUrl: 'Embedding 地址',
+      embeddingBaseUrlHint: 'OpenAI 兼容的 embedding 端点',
+      embeddingModel: 'Embedding 模型',
+      testConnection: '连接',
+      test: '测试',
+      connectionOk: 'Hindsight 已连接',
+      connectionFailed: '无法连接 Hindsight',
     },
     session: {
       mode: '重置模式',

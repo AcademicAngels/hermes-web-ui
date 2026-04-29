@@ -7,11 +7,15 @@ services:
       - hermes-agent-src:/opt/hermes
     environment:
       - HERMES_HOME=/home/agent/.hermes
+      - HINDSIGHT_MODE=${HINDSIGHT_MODE:-}
+      - HINDSIGHT_API_URL=${HINDSIGHT_API_URL:-http://hindsight:8888}
     stdin_open: true
     tty: true
     restart: unless-stopped
     ports:
       - "8642-8670:8642-8670"
+    networks:
+      - hindsight-net
 
   hermes-webui:
     build:
@@ -36,7 +40,50 @@ services:
       - HERMES_HOME=/home/agent/.hermes
       - HERMES_BIN=${HERMES_BIN:-/opt/hermes/.venv/bin/hermes}
       - AUTH_DISABLED=${AUTH_DISABLED:-false}
+      - HINDSIGHT_MODE=${HINDSIGHT_MODE:-}
+      - HINDSIGHT_API_URL=${HINDSIGHT_API_URL:-http://hindsight:8888}
+      - HINDSIGHT_URL=${HINDSIGHT_URL:-http://hindsight:8888}
     restart: unless-stopped
+    networks:
+      - hindsight-net
+
+  hindsight-postgres:
+    image: pgvector/pgvector:pg${HINDSIGHT_DB_VERSION:-18}
+    container_name: hindsight-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${HINDSIGHT_DB_USER:-hindsight_user}
+      POSTGRES_PASSWORD: ${HINDSIGHT_DB_PASSWORD:-hindsight_pass}
+      POSTGRES_DB: ${HINDSIGHT_DB_NAME:-hindsight_db}
+    volumes:
+      - ${HERMES_DATA_DIR:-./hermes_data}/hindsight-postgres:/var/lib/postgresql
+    networks:
+      - hindsight-net
+
+  hindsight:
+    image: ghcr.io/vectorize-io/hindsight:${HINDSIGHT_VERSION:-latest}
+    container_name: hindsight-app
+    restart: unless-stopped
+    ports:
+      - "${HINDSIGHT_PORT:-18888}:8888"
+      - "${HINDSIGHT_UI_PORT:-19999}:9999"
+    environment:
+      - HINDSIGHT_API_DATABASE_URL=postgresql://${HINDSIGHT_DB_USER:-hindsight_user}:${HINDSIGHT_DB_PASSWORD:-hindsight_pass}@hindsight-postgres:5432/${HINDSIGHT_DB_NAME:-hindsight_db}
+      - HINDSIGHT_API_LLM_API_KEY=${HINDSIGHT_LLM_API_KEY:-}
+      - HINDSIGHT_API_LLM_BASE_URL=${HINDSIGHT_LLM_BASE_URL:-}
+      - HINDSIGHT_API_LLM_MODEL=${HINDSIGHT_LLM_MODEL:-}
+      - HINDSIGHT_API_EMBEDDING_PROVIDER=${HINDSIGHT_EMBEDDING_PROVIDER:-openai_compatible}
+      - HINDSIGHT_API_EMBEDDING_BASE_URL=${HINDSIGHT_EMBEDDING_BASE_URL:-}
+      - HINDSIGHT_API_EMBEDDING_API_KEY=${HINDSIGHT_EMBEDDING_API_KEY:-}
+      - HINDSIGHT_API_EMBEDDING_MODEL=${HINDSIGHT_EMBEDDING_MODEL:-}
+    depends_on:
+      - hindsight-postgres
+    networks:
+      - hindsight-net
 
 volumes:
   hermes-agent-src:
+
+networks:
+  hindsight-net:
+    driver: bridge

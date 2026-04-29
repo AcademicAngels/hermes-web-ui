@@ -227,6 +227,26 @@ export default {
     soul: '소울',
     noSoul: '소울 설정이 없습니다.',
     soulPlaceholder: '소울 설정을 작성하세요...',
+    fileMemory: '파일 메모리',
+    semanticMemory: '시맨틱 메모리',
+  },
+
+  // Hindsight
+  hindsight: {
+    status: '상태',
+    online: '온라인',
+    offline: '오프라인',
+    banks: '메모리 뱅크',
+    search: '기억 검색',
+    searchPlaceholder: '무엇을 기억하고 싶으신가요?',
+    recall: '회상',
+    reflect: '추론',
+    noResults: '기억을 찾을 수 없습니다',
+    addMemory: '기억 추가',
+    retainPlaceholder: '기억 내용을 입력하세요...',
+    contextPlaceholder: '컨텍스트 (선택)',
+    retain: '저장',
+    retained: '기억이 저장되었습니다',
   },
 
   // 모델
@@ -417,6 +437,20 @@ export default {
       charLimitHint: 'MEMORY.md 최대 문자 수',
       userCharLimit: '사용자 프로필 문자 제한',
       userCharLimitHint: 'USER.md 최대 문자 수',
+    },
+    hindsight: {
+      title: 'Hindsight 시맨틱 메모리',
+      enabled: 'Hindsight 활성화',
+      enabledHint: '활성화하면 충돌을 방지하기 위해 내장 메모리 도구가 비활성화됩니다',
+      embeddingProvider: 'Embedding 제공자',
+      embeddingProviderHint: '텍스트 임베딩 제공자',
+      embeddingBaseUrl: 'Embedding 기본 URL',
+      embeddingBaseUrlHint: 'OpenAI 호환 Embedding 엔드포인트',
+      embeddingModel: 'Embedding 모델',
+      testConnection: '연결',
+      test: '테스트',
+      connectionOk: 'Hindsight 연결됨',
+      connectionFailed: 'Hindsight에 연결할 수 없습니다',
     },
     session: {
       mode: '초기화 모드',

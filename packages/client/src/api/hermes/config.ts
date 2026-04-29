@@ -26,6 +26,11 @@ export interface MemoryConfig {
   user_profile_enabled?: boolean
   memory_char_limit?: number
   user_char_limit?: number
+  hindsight_enabled?: boolean
+  hindsight_url?: string
+  hindsight_embedding_provider?: string
+  hindsight_embedding_base_url?: string
+  hindsight_embedding_model?: string
 }
 
 export interface SessionResetConfig {
