@@ -40,6 +40,8 @@ services:
       - HERMES_HOME=/home/agent/.hermes
       - HERMES_BIN=${HERMES_BIN:-/opt/hermes/.venv/bin/hermes}
       - AUTH_DISABLED=${AUTH_DISABLED:-false}
+      - HINDSIGHT_MODE=${HINDSIGHT_MODE:-}
+      - HINDSIGHT_API_URL=${HINDSIGHT_API_URL:-http://hindsight:8888}
       - HINDSIGHT_URL=${HINDSIGHT_URL:-http://hindsight:8888}
     restart: unless-stopped
     networks:
