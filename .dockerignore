@@ -1,5 +1,9 @@
 .git
 .gitignore
+.codex
+.env
+Caddyfile
+Dockerfile.nodepty
 node_modules
 dist
 package-lock.json
