@@ -1,0 +1,25 @@
+services:
+  hermes-agent:
+    ports: !reset []
+
+  hermes-webui:
+    ports: !reset []
+
+  hermes-proxy:
+    image: caddy:2-alpine
+    container_name: hermes-proxy
+    depends_on:
+      - hermes-webui
+    ports:
+      - "18960:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    networks:
+      - hindsight-net
+
+volumes:
+  caddy_data:
+  caddy_config:

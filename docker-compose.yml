@@ -54,7 +54,7 @@ services:
       POSTGRES_PASSWORD: ${HINDSIGHT_DB_PASSWORD:-hindsight_pass}
       POSTGRES_DB: ${HINDSIGHT_DB_NAME:-hindsight_db}
     volumes:
-      - ${HERMES_DATA_DIR:-./hermes_data}/hindsight-postgres:/var/lib/postgresql/data
+      - ${HERMES_DATA_DIR:-./hermes_data}/hindsight-postgres:/var/lib/postgresql
     networks:
       - hindsight-net
 

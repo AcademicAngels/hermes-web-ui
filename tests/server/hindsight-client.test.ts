@@ -45,7 +45,7 @@ describe('HindsightClient', () => {
       })
       expect(result.success).toBe(true)
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8888/v1/default/banks/default/memory/retain',
+        'http://localhost:8888/v1/default/banks/default/memories',
         expect.objectContaining({ method: 'POST' }),
       )
     })

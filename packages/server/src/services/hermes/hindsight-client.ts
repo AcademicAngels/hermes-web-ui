@@ -74,7 +74,7 @@ export function createHindsightClient(baseUrl: string) {
     async retain(r: RetainRequest): Promise<RetainResponse> {
       const bankId = r.bank_id || 'default'
       return req<RetainResponse>(
-        `/v1/default/banks/${bankId}/memory/retain`,
+        `/v1/default/banks/${bankId}/memories`,
         { method: 'POST', body: JSON.stringify({ items: r.items }) },
       )
     },
@@ -82,7 +82,7 @@ export function createHindsightClient(baseUrl: string) {
     async recall(r: RecallRequest): Promise<RecallResponse> {
       const bankId = r.bank_id || 'default'
       return req<RecallResponse>(
-        `/v1/default/banks/${bankId}/memory/recall`,
+        `/v1/default/banks/${bankId}/memories/recall`,
         { method: 'POST', body: JSON.stringify({ query: r.query, types: r.types, budget: r.budget || 'mid', max_tokens: r.max_tokens || 4096, tags: r.tags }) },
       )
     },
@@ -90,7 +90,7 @@ export function createHindsightClient(baseUrl: string) {
     async reflect(r: ReflectRequest): Promise<ReflectResponse> {
       const bankId = r.bank_id || 'default'
       return req<ReflectResponse>(
-        `/v1/default/banks/${bankId}/memory/reflect`,
+        `/v1/default/banks/${bankId}/reflect`,
         { method: 'POST', body: JSON.stringify({ query: r.query, budget: r.budget || 'low', max_tokens: r.max_tokens || 4096, tags: r.tags }) },
       )
     },
