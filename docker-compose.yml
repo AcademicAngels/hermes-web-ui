@@ -7,6 +7,8 @@ services:
       - hermes-agent-src:/opt/hermes
     environment:
       - HERMES_HOME=/home/agent/.hermes
+      - TZ=${TZ:-Asia/Shanghai}
+      - HERMES_TIMEZONE=${HERMES_TIMEZONE:-Asia/Shanghai}
       - HINDSIGHT_MODE=${HINDSIGHT_MODE:-}
       - HINDSIGHT_API_URL=${HINDSIGHT_API_URL:-http://hindsight:8888}
     stdin_open: true
@@ -38,11 +40,39 @@ services:
       - PORT=${PORT:-6060}
       - UPSTREAM=${UPSTREAM:-http://hermes-agent:8642}
       - HERMES_HOME=/home/agent/.hermes
+      - TZ=${TZ:-Asia/Shanghai}
+      - HERMES_TIMEZONE=${HERMES_TIMEZONE:-Asia/Shanghai}
       - HERMES_BIN=${HERMES_BIN:-/opt/hermes/.venv/bin/hermes}
       - AUTH_DISABLED=${AUTH_DISABLED:-false}
       - HINDSIGHT_MODE=${HINDSIGHT_MODE:-}
       - HINDSIGHT_API_URL=${HINDSIGHT_API_URL:-http://hindsight:8888}
       - HINDSIGHT_URL=${HINDSIGHT_URL:-http://hindsight:8888}
+    restart: unless-stopped
+    networks:
+      - hindsight-net
+
+  hermes-cron-memory-ingestor:
+    build:
+      context: ${CRON_MEMORY_INGESTOR_CONTEXT:-../hermes-cron-memory-ingestor}
+      dockerfile: Dockerfile
+    image: ${CRON_MEMORY_INGESTOR_IMAGE:-hermes-cron-memory-ingestor-local:latest}
+    container_name: ${CRON_MEMORY_INGESTOR_CONTAINER_NAME:-hermes-cron-memory-ingestor}
+    depends_on:
+      - hindsight
+    volumes:
+      - ${HERMES_DATA_DIR:-./hermes_data}:/home/agent/.hermes
+    environment:
+      - HERMES_HOME=/home/agent/.hermes
+      - CRON_OUTPUT_DIR=/home/agent/.hermes/cron/output
+      - HINDSIGHT_URL=${HINDSIGHT_URL:-http://hindsight:8888}
+      - HINDSIGHT_BANK_ID=${HINDSIGHT_BANK_ID:-default}
+      - INGEST_INTERVAL_SECONDS=${CRON_MEMORY_INGEST_INTERVAL_SECONDS:-60}
+      - INGESTOR_EVENT_HOST=0.0.0.0
+      - INGESTOR_EVENT_PORT=${CRON_MEMORY_EVENT_PORT:-8787}
+      - INGESTOR_EXCLUDED_SESSION_IDS=${CRON_MEMORY_EXCLUDED_SESSION_IDS:-dfff2bec-c29e-4e04-a9cb-dd83b451bf44}
+      - INGESTOR_TAGS=${CRON_MEMORY_TAGS:-hermes,cron}
+    expose:
+      - "${CRON_MEMORY_EVENT_PORT:-8787}"
     restart: unless-stopped
     networks:
       - hindsight-net
