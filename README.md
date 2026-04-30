@@ -202,6 +202,7 @@ Open **http://localhost:6060**
 - Web UI auth token is stored in `./hermes_data/hermes-web-ui/.token`
 - Cron job final responses are retained into Hindsight by the `hermes-cron-memory-ingestor` sidecar
 - The ingestor only reads cron output `## Response` sections and does not retain cron prompts
+- Structured outfit memory events can be posted inside the Docker network to `http://hermes-cron-memory-ingestor:8787/v1/outfit/events`
 - Override the ingestor source path with `CRON_MEMORY_INGESTOR_CONTEXT=/path/to/hermes-cron-memory-ingestor`
 - On first run with auth enabled, the token is printed to container logs
 - All runtime settings are environment-variable driven in `docker-compose.yml`
