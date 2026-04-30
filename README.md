@@ -184,22 +184,25 @@ hermes-web-ui start
 
 ### Docker Compose
 
-Run Web UI together with Hermes Agent:
+Run Web UI together with Hermes Agent, Hindsight, and the cron output memory ingestor:
 
 ```bash
 # Use pre-built image (Recommended)
-WEBUI_IMAGE=ekkoye8888/hermes-web-ui:latest docker compose up -d hermes-agent hermes-webui
+WEBUI_IMAGE=ekkoye8888/hermes-web-ui:latest docker compose up -d hermes-agent hermes-webui hindsight-postgres hindsight hermes-cron-memory-ingestor
 
 # Or build from source
-docker compose up -d --build hermes-agent hermes-webui
+docker compose up -d --build hermes-agent hermes-webui hindsight-postgres hindsight hermes-cron-memory-ingestor
 
-docker compose logs -f hermes-webui
+docker compose logs -f hermes-webui hermes-cron-memory-ingestor
 ```
 
 Open **http://localhost:6060**
 
 - Persistent Hermes data is stored in `./hermes_data`
 - Web UI auth token is stored in `./hermes_data/hermes-web-ui/.token`
+- Cron job final responses are retained into Hindsight by the `hermes-cron-memory-ingestor` sidecar
+- The ingestor only reads cron output `## Response` sections and does not retain cron prompts
+- Override the ingestor source path with `CRON_MEMORY_INGESTOR_CONTEXT=/path/to/hermes-cron-memory-ingestor`
 - On first run with auth enabled, the token is printed to container logs
 - All runtime settings are environment-variable driven in `docker-compose.yml`
 
